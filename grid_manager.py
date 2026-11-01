@@ -1,6 +1,7 @@
 import customtkinter as ctk
 
 from widget import Widget
+from grid_drag import GridDragger
 
 
 class GridManager(ctk.CTkFrame):
@@ -23,14 +24,28 @@ class GridManager(ctk.CTkFrame):
 
         self.occupied_cells = [set(), set(), set()]
         self.widgets_list = []
+        self.tiles = {}
 
         self.current_base_w = 90
         self.current_base_h = 90
+        self._configure_page_grids()
+
+        self.drag = GridDragger(self)
 
     def switch_page(self, index):
+        self.drag.cancel()
         self.pages[self.current_page_idx].grid_forget()
         self.current_page_idx = index
         self.pages[self.current_page_idx].grid(row=0, column=0, sticky="nsew")
+
+    def _configure_page_grids(self):
+        """Fixed row/column sizes, so empty cells keep their space.
+        Without this an empty column collapses to 0 px and tiles can't sit in a chosen spot."""
+        for page in self.pages:
+            for c in range(self.MAX_COLS):
+                page.grid_columnconfigure(c, minsize=self.current_base_w + self.PADDING)
+            for r in range(self.MAX_ROWS):
+                page.grid_rowconfigure(r, minsize=self.current_base_h + self.PADDING)
 
     def on_configure(self):
         width = self.winfo_width()
@@ -57,53 +72,92 @@ class GridManager(ctk.CTkFrame):
         return w, h
 
     def update_all_widgets(self):
+        self._configure_page_grids()
         for item in self.widgets_list:
             w, h = self.tile_size(item["cols"], item["rows"])
             item["widget"].configure(width=w, height=h, corner_radius=Widget.CORNER_RADIUS)
 
-    def add_widget(self, widget_type="Widget", size="1x1", backgnd="#22242a", font_color="#ffffff"):
-        cols, rows = map(int, size.split("x"))
-        page = self.pages[self.current_page_idx]
+    # layout helpers
 
-        found_slot = False
-        start_r, start_c = 0, 0
+    @staticmethod
+    def cells(r, c, cols, rows):
+        return {(r + i, c + j) for i in range(rows) for j in range(cols)}
 
+    def items_overlapping(self, page_idx, r, c, cols, rows, ignore=()):
+        """Widgets on that page that overlap this area (skipping any in ignore)."""
+        target = self.cells(r, c, cols, rows)
+        return [it for it in self.widgets_list
+                if it["page_idx"] == page_idx
+                and not any(it is x for x in ignore)
+                and self.cells(it["row"], it["col"], it["cols"], it["rows"]) & target]
+
+    def _find_free_slot(self, page_idx, cols, rows):
         for r in range(self.MAX_ROWS - rows + 1):
-            if found_slot:
-                break
             for c in range(self.MAX_COLS - cols + 1):
-                is_free = True
-                for i in range(rows):
-                    for j in range(cols):
-                        if (r + i, c + j) in self.occupied_cells[self.current_page_idx]:
-                            is_free = False
-                            break
-                    if not is_free:
-                        break
+                if not self.items_overlapping(page_idx, r, c, cols, rows):
+                    return r, c
+        return None
 
-                if is_free:
-                    start_r, start_c = r, c
-                    found_slot = True
-                    break
+    def _sync_occupied(self):
+        self.occupied_cells = [set() for _ in self.pages]
+        for it in self.widgets_list:
+            self.occupied_cells[it["page_idx"]] |= self.cells(it["row"], it["col"], it["cols"], it["rows"])
 
-        if not found_slot:
-            print(f"No space available on page {self.current_page_idx + 1} for a {size} widget.")
-            return
+    def _grid_item(self, item):
+        item["widget"].grid(row=item["row"], column=item["col"], rowspan=item["rows"], columnspan=item["cols"], padx=self.PADDING // 2, pady=self.PADDING //2, sticky="nw")
 
-        for i in range(rows):
-            for j in range(cols):
-                self.occupied_cells[self.current_page_idx].add((start_r + i, start_c + j))
+    def cell_origin(self, r, c):
+        """Screen coordinates of the top-left of cell (r, c) on the current page."""
+        page = self.pages[self.current_page_idx]
+        x, y, _, _ = page.grid_bbox(c, r)
+        return page.winfo_rootx() + x, page.winfo_rooty() + y
 
+    # changing the layout
+
+    def add_widget(self, widget_type="Widget", size="1x1", backgnd="#22242a",
+                   font_color="#ffffff", at=None):
+        """at=(row, col) places it there; at=None uses the first free slot."""
+        cols, rows = map(int, size.split("x"))
+        page_idx = self.current_page_idx
+ 
+        if at is None:
+            slot = self._find_free_slot(page_idx, cols, rows)
+        else:
+            free = not self.items_overlapping(page_idx, at[0], at[1], cols, rows)
+            slot = at if free else None
+ 
+        if slot is None:
+            print(f"No space available on page {page_idx + 1} for a {size} widget.")
+            return None
+        r, c = slot
+ 
         w, h = self.tile_size(cols, rows)
-
-        tile = Widget(page, widget_type, size, width=w, height=h,
+        tile = Widget(self.pages[page_idx], widget_type, size, width=w, height=h,
                       bg=backgnd, fg=font_color)
-        tile.grid(row=start_r, column=start_c, rowspan=rows, columnspan=cols,
-                  padx=self.PADDING // 2, pady=self.PADDING // 2, sticky="nw")
-
-        self.widgets_list.append({
-            "widget": tile,
-            "cols": cols,
-            "rows": rows,
-            "page_idx": self.current_page_idx
-        })
+        item = {
+            "widget": tile, "cols": cols, "rows": rows, "page_idx": page_idx,
+            "row": r, "col": c,
+            "type": widget_type, "size": size, "bg": backgnd, "fg": font_color,
+        }
+        self.widgets_list.append(item)
+        self.tiles[tile] = item
+        self._grid_item(item)
+        self._sync_occupied()
+        return item
+ 
+    def remove_widget(self, item):
+        self.widgets_list.remove(item)
+        self.tiles.pop(item["widget"], None)
+        self._sync_occupied()
+        self.after(1, item["widget"].destroy)       # after the current event finishes
+ 
+    def move_widget(self, item, r, c):
+        item["row"], item["col"] = r, c
+        self._grid_item(item)
+        self._sync_occupied()
+ 
+    def swap_widgets(self, a, b):
+        a["row"], a["col"], b["row"], b["col"] = b["row"], b["col"], a["row"], a["col"]
+        self._grid_item(a)
+        self._grid_item(b)
+        self._sync_occupied()

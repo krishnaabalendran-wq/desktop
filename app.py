@@ -5,6 +5,8 @@ import customtkinter as ctk
 from gradient_border_button import GradientBorderButton
 from grid_manager import GridManager
 
+DEFAULT_SIZE = "1x1"
+DEFAULT_THEME = ("#22242a", "#ffffff")
 
 class App(ctk.CTk):
     def __init__(self):
@@ -77,6 +79,18 @@ class App(ctk.CTk):
         )
         self.settings_button.pack(side="right", padx=(0, 10))
 
+        self.edit_button = GradientBorderButton(
+            self.right_buttons,
+            text="Edit",
+            width=110,
+            height=32,
+            fg_color="#1e1e1e",
+            hover_color="#2b2b2b",
+            corner_radius=16,
+            border_width=2,
+            command=self.toggle_edit_mode)
+        self.edit_button.pack(side="right", padx=(0, 10))
+
         # 4. GRID MANAGER (Body)
         self.grid_manager = GridManager(master=self, fg_color="transparent")
         self.grid_manager.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
@@ -116,13 +130,17 @@ class App(ctk.CTk):
         self.menu_scroll = ctk.CTkScrollableFrame(self.popout_menu, fg_color="transparent", width=140, height=230)
         self.menu_scroll.pack(padx=10, pady=10, fill="both", expand=True)
 
-        widgets_to_add = ["Timer", "Volume"]
+        widgets_to_add = ["Timer", "Volume", "Weather"]
         sizes = ["1x1", "2x1", "2x2"]
 
         for w_type in widgets_to_add:
-            btn = ctk.CTkButton(self.menu_scroll, text=w_type, fg_color="#403D3D", hover_color="#504D4D",
-                                command=lambda t=w_type: self.toggle_size_menu(t, sizes))
+            btn = ctk.CTkButton(self.menu_scroll, text=w_type,
+                    fg_color="#403D3D", hover_color="#504D4D")
             btn.pack(pady=5, fill="x")
+            self.grid_manager.drag.attach_palette(
+                btn, w_type, DEFAULT_SIZE, *DEFAULT_THEME,
+                on_tap=lambda t=w_type: self.toggle_size_menu(t, sizes))
+        self.grid_manager.drag.set_remove_zone(self.popout_menu)  # Drop a tile here to delete it
 
         # 2. Size Menu
         self.size_menu = ctk.CTkFrame(self, width=80, corner_radius=15, fg_color="#1e1e1e")
@@ -144,14 +162,26 @@ class App(ctk.CTk):
                       fg_color="#403D3D", hover_color="#504D4D",
                       command=self.hide_menus).pack(side="right")
 
+    def show_add_menu(self):
+        self.hide_menus()  # close the settings panel if it's open
+        self.popout_menu.place(relx=1.0, rely=0.0, y=60, x=-20, anchor="ne")
+        self.menu_is_open = True
+        self.popout_menu.lift()
+
     def toggle_main_menu(self):
         if self.menu_is_open:
             self.hide_menus()
         else:
-            self.hide_menus()  # close the settings panel if it is open
-            self.popout_menu.place(relx=1.0, rely=0.0, y=60, x=-20, anchor="ne")
-            self.menu_is_open = True
-            self.popout_menu.lift()
+            self.show_add_menu()
+
+    def toggle_edit_mode(self):
+        editing = not self.grid_manager.drag.editing
+        self.grid_manager.drag.set_editing(editing)
+        self.edit_button.configure(text="Done" if editing else "Edit")
+        if editing:
+            self.show_add_menu()
+        else:
+            self.hide_menus()
 
     def toggle_settings_panel(self):
         if self.settings_is_open:
