@@ -130,7 +130,7 @@ class App(ctk.CTk):
         self.menu_scroll = ctk.CTkScrollableFrame(self.popout_menu, fg_color="transparent", width=140, height=230)
         self.menu_scroll.pack(padx=10, pady=10, fill="both", expand=True)
 
-        widgets_to_add = ["Timer", "Volume", "Weather"]
+        widgets_to_add = ["Timer", "Volume", "Weather", "Notify"]
         sizes = ["1x1", "2x1", "2x2"]
 
         for w_type in widgets_to_add:
