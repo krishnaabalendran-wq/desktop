@@ -1,3 +1,5 @@
+import time
+import math
 import customtkinter as ctk
 
 from widget import Widget
@@ -23,11 +25,16 @@ class Outline:
 
     def __init__(self, parent):
         self.bars = [ctk.CTkFrame(parent, corner_radius=0) for _ in range(4)]
+        self.is_visible = False
+        self.is_valid = True
+        self._animate()
 
-    def show(self, x, y, width, height, color, t=3):
+    def show(self, x, y, width, height, is_valid, t=3):
+        self.is_visible = True
+        self.is_valid = is_valid
+        
         top, bottom, left, right = self.bars
-        for bar in self.bars:
-            bar.configure(fg_color=color)
+        
         top.configure(width=width, height=t)
         top.place(x=x, y=y)
         bottom.configure(width=width, height=t)
@@ -36,12 +43,33 @@ class Outline:
         left.place(x=x, y=y)
         right.configure(width=t, height=height)
         right.place(x=x + width - t, y=y)
+        
         for bar in self.bars:
             bar.lift()
 
     def hide(self):
+        self.is_visible = False
         for bar in self.bars:
             bar.place_forget()
+
+    def _animate(self):
+        if self.is_visible:
+            # Calculate pulsing intensity
+            tm = time.time() * 6
+            v = max(0, min(255, int(math.sin(tm) * 75 + 180)))
+            
+            # Bright neon green for valid drops, bright neon red for invalid
+            color = f"#00{v:02x}00" if self.is_valid else f"#{v:02x}0000"
+            
+            for bar in self.bars:
+                try:
+                    bar.configure(fg_color=color)
+                except Exception:
+                    pass
+                    
+        # Keep the animation loop ticking in the background
+        self.bars[0].after(30, self._animate)
+
 
 class GridDragger:
     """Drag and drop for a GridManager.
@@ -66,7 +94,7 @@ class GridDragger:
         self._dragging = False
 
         self._top = grid.winfo_toplevel()
-        self._ghost = ctk.CTkLabel(self._top, text="", corner_radius=Widget.CORNER_RADIUS, fg_color="#1f6aa5")
+        self._ghost = ctk.CTkLabel(self._top, text="", corner_radius=Widget.CORNER_RADIUS, fg_color="#3a3a3a", text_color="#e8e8e8")
         self._outline = Outline(grid)
 
         #Bound on the window, so presses on any tile (or its inner labels) are caught
@@ -209,7 +237,10 @@ class GridDragger:
         g = self.grid
         _, r, c = hit
         ox, oy = g.cell_origin(r, c)
+        
         x = ox - g.winfo_rootx() + g.PADDING // 2
         y = oy - g.winfo_rooty() + g.PADDING // 2
         width, height = g.tile_size(*self._size)
-        self._outline.show(x, y, width, height, "lime" if self._plan(r, c) else "red")
+        
+        # Passes a boolean (True for valid drops, False for blocked overlaps)
+        self._outline.show(x, y, width, height, bool(self._plan(r, c)))
