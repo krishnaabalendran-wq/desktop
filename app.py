@@ -331,7 +331,6 @@ class App(ctk.CTk):
 
     def on_window_configure(self, event):
         if event.widget == self:
-            self.grid_manager.on_configure()
             if self.settings_is_open:
                 self.size_settings_panel()
 

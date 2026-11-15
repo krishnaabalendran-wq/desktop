@@ -54,14 +54,14 @@ class CornerGlowCanvas(tk.Canvas):
     """Animated gradient: the theme colour in the top left, fading to near-black across the tile."""
 
     def __init__(self, master, width, height, bg_hex, fg_hex=None, fps=20):
-        # We inset by 1px so the CustomTkinter border is not covered
+        # width/height are screen pixels (a plain tk Canvas isn't scaled by CTk)
+        width, height = int(width), int(height)   # PIL needs whole numbers
         super().__init__(master, width=width-2, height=height-2, highlightthickness=0, bd=0, bg="#0a0a0a")
-        self.w = width - 2
-        self.h = height - 2
+        self.w = max(1, width - 2)
+        self.h = max(1, height - 2)
 
-        # Override the base background to be very dark (mostly black)
         self.bg_rgb = _hex_to_rgb("#0a0a0a")
-        self.glow_rgb = _hex_to_rgb(bg_hex)   # the theme colour, shown at the top-left
+        self.glow_rgb = _hex_to_rgb(bg_hex)
 
         self.phase = random.uniform(0, math.pi * 2)
         self.delay = int(1000 / fps)
@@ -71,6 +71,12 @@ class CornerGlowCanvas(tk.Canvas):
         self.place(x=1, y=1, width=self.w, height=self.h)
         self.tk.call("lower", self._w)
         self._animate()
+
+    def resize(self, width, height):
+        # Keep the glow the same size as its tile (screen pixels)
+        self.w = max(1, int(width) - 2)
+        self.h = max(1, int(height) - 2)
+        self.place(x=1, y=1, width=self.w, height=self.h)
 
     def _get_color_at(self, nx, ny, pulse):
         dist = math.sqrt(nx**2 + ny**2)
@@ -135,8 +141,11 @@ class Widget(ctk.CTkFrame):
         self.pack_propagate(False)
         self.grid_propagate(False)
 
+        # Canvas needs screen pixels, so multiply by the display scale
+        s = self._get_widget_scaling()
         # 1. Add the animated mostly-black corner glow
-        self.bg_canvas = CornerGlowCanvas(self, width, height, bg, fg)
+        self.bg_canvas = CornerGlowCanvas(self, int(width * s), int(height * s), bg, fg)
+        self.bind("<Configure>", self._on_tile_resize, add="+")
 
         # 2. Build internal widgets
         builders = {
@@ -151,6 +160,10 @@ class Widget(ctk.CTkFrame):
 
         # 3. Bind hover
         self.bind_hover_events(self)
+
+    def _on_tile_resize(self, event):
+        # Resize the glow whenever the tile changes size
+        self.bg_canvas.resize(self.winfo_width(), self.winfo_height())
 
     def bind_hover_events(self, widget):
         widget.bind("<Enter>", self.on_enter, add="+")

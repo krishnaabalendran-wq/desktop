@@ -31,6 +31,8 @@ class GridManager(ctk.CTkFrame):
         self._configure_page_grids()
 
         self.drag = GridDragger(self)
+        # Wait until Tk has finished resizing before measuring
+        self.bind("<Configure>", lambda e: self.after_idle(self.on_configure))
 
     def switch_page(self, index):
         self.drag.cancel()
@@ -39,29 +41,26 @@ class GridManager(ctk.CTkFrame):
         self.pages[self.current_page_idx].grid(row=0, column=0, sticky="nsew")
 
     def _configure_page_grids(self):
-        """Fixed row/column sizes, so empty cells keep their space.
-        Without this an empty column collapses to 0 px and tiles can't sit in a chosen spot."""
+        # Equal-sized cells. Fixes uneven gaps and the layout shifting.
         for page in self.pages:
             for c in range(self.MAX_COLS):
-                page.grid_columnconfigure(c, minsize=self.current_base_w + self.PADDING)
+                page.grid_columnconfigure(c, weight=1, uniform="cell_col")
             for r in range(self.MAX_ROWS):
-                page.grid_rowconfigure(r, minsize=self.current_base_h + self.PADDING)
+                page.grid_rowconfigure(r, weight=1, uniform="cell_row")
 
     def on_configure(self):
-        width = self.winfo_width()
-        height = self.winfo_height()
+        s = self._get_widget_scaling()
+        width = self.winfo_width() / s     # screen pixels -> CTk units
+        height = self.winfo_height() / s
 
         if width <= 1 or height <= 1:
             return
 
-        usable_w = width - (self.PADDING * 2)
-        usable_h = height - (self.PADDING * 2)
+        # tile size = cell size - padding
+        new_w = max(30, width / self.MAX_COLS - self.PADDING)
+        new_h = max(30, height / self.MAX_ROWS - self.PADDING)
 
-        # Dynamically calculate the stretching cell width/height based on the window size
-        new_w = max(30, (usable_w - (self.PADDING * (self.MAX_COLS - 1))) // self.MAX_COLS)
-        new_h = max(30, (usable_h - (self.PADDING * (self.MAX_ROWS - 1))) // self.MAX_ROWS)
-
-        if abs(self.current_base_w - new_w) > 2 or abs(self.current_base_h - new_h) > 2:
+        if abs(self.current_base_w - new_w) > 1 or abs(self.current_base_h - new_h) > 1:
             self.current_base_w = new_w
             self.current_base_h = new_h
             self.update_all_widgets()
@@ -69,7 +68,12 @@ class GridManager(ctk.CTkFrame):
     def tile_size(self, cols, rows):
         w = (self.current_base_w * cols) + (self.PADDING * (cols - 1))
         h = (self.current_base_h * rows) + (self.PADDING * (rows - 1))
-        return w, h
+        return int(w), int(h)   # whole numbers only, PIL crashes on floats
+
+    def tile_size(self, cols, rows):
+        w = (self.current_base_w * cols) + (self.PADDING * (cols - 1))
+        h = (self.current_base_h * rows) + (self.PADDING * (rows - 1))
+        return int(w), int(h)
 
     def update_all_widgets(self):
         self._configure_page_grids()
