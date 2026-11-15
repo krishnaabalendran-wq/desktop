@@ -232,7 +232,6 @@ class App(ctk.CTk):
             font=mono(11, True),
             text_color=TEXT,
             command=self.toggle_edit_mode)
-        self.edit_button.pack(side="right", padx=(0, 10))
 
         # 4. GRID MANAGER (Body)
         self.grid_manager = GridManager(master=self, fg_color="transparent")
@@ -246,6 +245,7 @@ class App(ctk.CTk):
         self.pending_size = ""
 
         self.create_widget_menus()
+        self.grid_manager.drag.on_edit_request = self.toggle_edit_mode   # hold menu -> EDIT / DONE
         self.bind("<Configure>", self.on_window_configure)
         
         # Load saved widgets and settings silently in the background
@@ -427,8 +427,11 @@ class App(ctk.CTk):
         self.grid_manager.drag.set_editing(editing)
         self.edit_button.configure(text="DONE" if editing else "EDIT")
         if editing:
+            self.edit_button.configure(text="DONE")
+            self.edit_button.pack(side="right", padx=(0, 10))
             self.show_add_menu()
         else:
+            self.edit_button.pack_forget()
             self.hide_menus()
 
     def toggle_settings_panel(self):
