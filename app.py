@@ -309,7 +309,7 @@ class App(ctk.CTk):
                     item["type"], item["size"], item["bg"], item["fg"], 
                     at=(item["r"], item["c"])
                 )
-            self.grid_manager.switch_page(0)
+            self.grid_manager.switch_page(0, animate=False)
         except Exception as e:
             print("Layout load error:", e)
 
@@ -323,11 +323,11 @@ class App(ctk.CTk):
         self.time_label.configure(text=current_time)
         self.after(1000, self.update_clock)
 
-    def on_dot_clicked(self, index):
+    def on_dot_clicked(self, index, animate=True):
         for i, dot in enumerate(self.dots):
             color = ("#111111", "#ffffff") if i == index else ("#d1d1d6", "#333333")
             dot.configure(fg_color=color)
-        self.grid_manager.switch_page(index)
+        self.grid_manager.switch_page(index, animate=animate)
 
     def on_window_configure(self, event):
         if event.widget == self:

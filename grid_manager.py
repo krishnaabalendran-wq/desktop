@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import time
 
 from widget import Widget
 from grid_drag import GridDragger
@@ -9,18 +10,22 @@ class GridManager(ctk.CTkFrame):
     MAX_COLS = 6
     MAX_ROWS = 3
 
+    SLIDE_DURATION = 240
+    SLIDE_FRAME_DELAY = 16 # wait between animation frames
+
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
 
         # Create 3 frames (pages) to stack on top of each other
         self.pages = [ctk.CTkFrame(self, fg_color="transparent") for _ in range(3)]
-        self.current_page_idx = 0
+        self.current_page_idx = 0 # the page the rest of the code treats as "current"
+        self._shown_idx = 0 # the page on screen
+        self._slide = None # slide in progress or None when not animating
+        self._slide_timer_id = None # the id returned by after() for the next animation frame
 
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-
-        # Display the first page
-        self.pages[0].grid(row=0, column=0, sticky="nsew")
+        # Pages are positioned with place() instead of grid() so they can slide sideways
+        # relwidth/relheight=1 makes each page fill the whole GridManager, same as stick="nsew"
+        self.pages[0].place(relx=0, rely=0, relwidth=1, relheight=1)
 
         self.occupied_cells = [set(), set(), set()]
         self.widgets_list = []
@@ -32,11 +37,74 @@ class GridManager(ctk.CTkFrame):
 
         self.drag = GridDragger(self)
 
-    def switch_page(self, index):
+    def switch_page(self, index, animate):
         self.drag.cancel()
-        self.pages[self.current_page_idx].grid_forget()
-        self.current_page_idx = index
-        self.pages[self.current_page_idx].grid(row=0, column=0, sticky="nsew")
+        self._finish_slide() # if a slide is running, jump it to its end first
+
+        leaving_idx = self._shown_idx
+        entering_idx = index
+
+        # update before the return below, because the layout sets current_page_idx directly then calls switch_page(0)
+        self.current_page_idx = entering_idx
+        if entering_idx == leaving_idx:
+            return
+        self._shown_idx = entering_idx
+
+        if not animate:
+            # instant swap (at startup so the app doesn't slide)
+            self.pages[leaving_idx].place_forget()
+            self.pages[entering_idx].place(relx=0, rely=0, relwidth=1, relheight=1)
+            return
+
+        # direction +1: new page from right / direction: -1: new page from left
+        direction = 1 if entering_idx > leaving_idx else -1
+
+        # new page just off-screen, on the entering slide, on top of the old one
+        self.pages[entering_idx].place(relx=direction, rely=0, relwidth=1, relheight=1)
+        self.pages[entering_idx].lift()
+
+        self._slide = {
+            "leaving": leaving_idx,
+            "entering": entering_idx,
+            "direction": direction,
+            "start": time.perf_counter(),
+        }
+        self._advance_slide()
+
+    def _advance_slide(self):
+        animation = self._slide
+        if animation is None:
+            return
+
+        # progress comes from real clock, so slow frame makes the slide skip ahead instead of taking longer
+        elapsed = (time.perf_counter() - animation["start"]) * 1000
+        progress = min(1.0, elapsed / self.SLIDE_DURATION)
+
+        # ease out: starts fast and slows to a stop
+        ease = 1 - (1 - progress) ** 3
+
+        direction = animation["direction"]
+        # the old pages slides out the opposite way the new pages comes in
+        self.pages[animation["leaving"]].place(relx=-direction * ease, rely=0, relwidth=1, relheight=1)
+        self.pages[animation["entering"]].place(relx=direction * (1 - ease), rely=0, relwidth=1, relheight=1)
+
+        if progress >= 1.0:
+            self._finish_slide()
+        else:
+            self._slide_timer_id = self.after(self.SLIDE_FRAME_DELAY, self._advance_slide)
+
+    def _finish_slide(self):
+        """End a slide immediately by stopping timer, hiding the old page, and pin the new."""
+        animation = self._slide
+        if animation is None:
+            return
+        if self._slide_timer_id is not None:
+            self.after_cancel(self._slide_timer_id)
+        self._slide = None
+        self._slide_timer_id = None
+
+        self.pages[animation["leaving"]].place_forget()
+        self.pages[animation["entering"]].place(relx=0, rely=0, relwidth=1, relheight=1)
 
     def _configure_page_grids(self):
         """Fixed row/column sizes, so empty cells keep their space.
