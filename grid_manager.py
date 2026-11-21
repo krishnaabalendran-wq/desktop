@@ -1,8 +1,11 @@
 import customtkinter as ctk
 import time
+import math
+import random
 
 from widget import Widget
 from grid_drag import GridDragger
+from style import mono
 
 
 class GridManager(ctk.CTkFrame):
@@ -12,6 +15,10 @@ class GridManager(ctk.CTkFrame):
 
     SLIDE_DURATION = 240
     SLIDE_FRAME_DELAY = 16 # wait between animation frames
+
+    JIGGLE_FRAME_MS = 40 # time between shake frames
+    JIGGLE_AMPLITUDE_PX = 2 # how far a tile moves from its resting spot
+    JIGGLE_SPEED = 14 # how fast it shakes
 
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
@@ -30,6 +37,10 @@ class GridManager(ctk.CTkFrame):
         self.occupied_cells = [set(), set(), set()]
         self.widgets_list = []
         self.tiles = {}
+
+        self.jiggling = False
+        self._jiggle_timer_id = None
+        self._jiggle_start_time = 0
 
         self.current_base_w = 90
         self.current_base_h = 90
@@ -171,8 +182,11 @@ class GridManager(ctk.CTkFrame):
         for it in self.widgets_list:
             self.occupied_cells[it["page_idx"]] |= self.cells(it["row"], it["col"], it["cols"], it["rows"])
 
-    def _grid_item(self, item):
-        item["widget"].grid(row=item["row"], column=item["col"], rowspan=item["rows"], columnspan=item["cols"], padx=self.PADDING // 2, pady=self.PADDING //2, sticky="nw")
+    def _grid_item(self, item, offset_x=0, offset_y=0):
+        """Place a tile in its grid cell, optionally nudged by a few pixels."""
+        half_padding = self.PADDING // 2
+        item["widget"].grid(row=item["row"], column=item["col"], rowspan=item["rows"], columnspan=item["cols"], padx=(half_padding + offset_x, half_padding - offset_x), pady=(half_padding + offset_y, half_padding - offset_y), sticky="nw")
+        item["offset"] = (offset_x, offset_y)
 
     def cell_origin(self, r, c):
         """Screen coordinates of the top-left of cell (r, c) on the current page."""
@@ -206,10 +220,15 @@ class GridManager(ctk.CTkFrame):
             "widget": tile, "cols": cols, "rows": rows, "page_idx": page_idx,
             "row": r, "col": c,
             "type": widget_type, "size": size, "bg": backgnd, "fg": font_color,
+            "offset": (0,0), "jiggle_phase": random.uniform(0, 2 * math.pi),
+            "badge": None,
         }
         self.widgets_list.append(item)
         self.tiles[tile] = item
         self._grid_item(item)
+        self._create_delete_badge(item)
+        if self.jiggling:
+            self._set_badge_visible(item, True)
         self._sync_occupied()
         return item
  
@@ -229,3 +248,55 @@ class GridManager(ctk.CTkFrame):
         self._grid_item(a)
         self._grid_item(b)
         self._sync_occupied()
+
+    def set_jiggle(self, on):
+        """Start or stop the shake and show or hide the delete."""
+        self.jiggling = on
+        for item in self.widgets_list:
+            self._set_badge_visible(item, on)
+
+        if on:
+            self._jiggle_start_time = time.perf_counter()
+            if self._jiggle_timer_id is None:
+                self._jiggle_frame()
+        else:
+            if self._jiggle_timer_id is not None:
+                self.after_cancel(self._jiggle_timer_id)
+                self._jiggle_timer_id = None
+            for item in self.widgets_list:
+                if item["offset"] != (0, 0):
+                    self._grid_item(item)
+
+    def _jiggle_frame(self):
+        """Move all visible tiles a little, the schedule the next frame."""
+        if not self.jiggling:
+            self._jiggle_timer_id = None
+            return
+
+        seconds = time.perf_counter() - self._jiggle_start_time
+        for item in self.widgets_list:
+            if item["page_idx"] != self.current_page_idx:
+                continue
+            phase = item["jiggle_phase"]
+            # two sine waves at different speeds make the movement wander instead of sliding back and forth along a line.
+            offset_x = round(self.JIGGLE_AMPLITUDE_PX * math.sin(seconds * self.JIGGLE_SPEED + phase))
+            offset_y = round(self.JIGGLE_AMPLITUDE_PX * math.sin(seconds * self.JIGGLE_SPEED * 1.3 + phase * 1.7))
+            if (offset_x, offset_y) != item["offset"]:
+                self._grid_item(item, offset_x, offset_y)
+
+        self._jiggle_timer_id = self.after(self.JIGGLE_FRAME_MS, self._jiggle_frame)
+
+    def _create_delete_badge(self, item):
+        item["badge"] = ctk.CTkButton(
+            item["widget"], text="\u00d7", width=16, height=16, corner_radius=0, border_width=0,
+            fg_color="#d64545", hover_color="#ff6b6b", text_color="#ffffff",
+            font=mono(12, True), command=lambda: self.remove_widget(item)
+        )
+
+    def _set_badge_visible(self, item, visible):
+        badge = item["badge"]
+        if visible:
+            badge.place(x=4, y=4, anchor="nw")
+            badge.lift()
+        else:
+            badge.place_forget()

@@ -245,7 +245,7 @@ class App(ctk.CTk):
         self.pending_size = ""
 
         self.create_widget_menus()
-        self.grid_manager.drag.on_edit_request = self.toggle_edit_mode   # hold menu -> EDIT / DONE
+        self.grid_manager.drag.on_edit_request = self.toggle_edit_mode   # holding a tile turns on edit mode
         self.bind("<Configure>", self.on_window_configure)
         
         # Load saved widgets and settings silently in the background
@@ -429,7 +429,7 @@ class App(ctk.CTk):
         if editing:
             self.edit_button.configure(text="DONE")
             self.edit_button.pack(side="right", padx=(0, 10))
-            self.show_add_menu()
+            self.hide_menus()
         else:
             self.edit_button.pack_forget()
             self.hide_menus()

@@ -3,7 +3,6 @@ import math
 import customtkinter as ctk
 
 from widget import Widget
-from style import SURFACE, BORDER, TEXT, BTN, BTN_HOVER, mono
 
 
 def inside(w, x, y):
@@ -112,23 +111,10 @@ class GridDragger:
         self.on_edit_request = None # called to switch edit more on/off
         self._hold_id = None 
         self._hold_item = None # the tile being held
-        self._menu_item = None # the tile the open menu belongs to
 
         self._top = grid.winfo_toplevel()
         self._ghost = ctk.CTkLabel(self._top, text="", corner_radius=Widget.CORNER_RADIUS, fg_color="#3a3a3a", text_color="#e8e8e8")
         self._outline = Outline(grid)
-
-        # Menu that appears when a tile is held
-        self._menu = ctk.CTkFrame(self._top, width=150, height=84, corner_radius=0,
-                                    fg_color=SURFACE, border_width=1, border_color=BORDER)
-        self._menu.pack_propagate(False)
-        display = dict(height=28, corner_radius=0, border_width=1, border_color=BORDER,
-                       text_color=TEXT, fg_color=BTN, hover_color=BTN_HOVER,
-                       font=mono(11, True))
-        self._menu_edit_button = ctk.CTkButton(self._menu, text="EDIT", command=self._menu_edit, **display)
-        self._menu_edit_button.pack(padx=8, pady=6, fill="x")
-        self._menu_delete_button = ctk.CTkButton(self._menu, text="DELETE", command=self._menu_delete, **display)
-        self._menu_delete_button.pack(padx=8, pady=6, fill="x")
 
         #Bound on the window, so presses on any tile (or its inner labels) are caught
         self._top.bind("<ButtonPress-1>", self._on_press, add="+")
@@ -139,6 +125,7 @@ class GridDragger:
         self.editing = on
         if not on:
             self.cancel()
+        self.grid.set_jiggle(on)
 
     def attach_palette(self, widget, widget_type, size="1x1", backgnd="#22242a", font_color="#ffffff", on_tap=None):
         """Make a menu widget a source: drag it onto the grid to add a widget, or just tap it to run on_tap."""
@@ -165,52 +152,14 @@ class GridDragger:
 
     def _hold_fired(self):
         """Runs when a tile has been held for a specfic amount of time."""
-        item = self._hold_item
         self._hold_id = None
-        if item is None or self._dragging:
+        if self.editing or self._dragging:
             return
-        self._show_menu(item)
-
-    def _in_menu(self, widget):
-        """True if the clicked tk widget is the menu or something inside it."""
-        while widget is not None:
-            if widget is self._menu:
-                return True
-            widget = getattr(widget, "master", None)
-        return False
-
-    def _show_menu(self, item):
-        self._menu_item = item
-        self._menu_edit_button.configure(text="DONE" if self.editing else "EDIT")
-
-        # Below to the right of where the press was
-        x = self._origin[0] - self._top.winfo_rootx() + 14
-        y = self._origin[1] - self._top.winfo_rooty() + 14
-        x = max(0, min(x, self._top.winfo_width() - 150 - 8))
-        y = max(0, min(y, self._top.winfo_height() - 84 - 8))
-        self._menu.place(x=x, y=y)
-        self._menu.lift()
-
-    def hide_menu(self):
-        self._menu.place_forget()
-        self._menu_item = None
-
-    def _menu_edit(self):
-        self.hide_menu()
         if self.on_edit_request:
             self.on_edit_request()
 
-    def _menu_delete(self):
-        item = self._menu_item
-        self.hide_menu()
-        if item is not None and item in self.grid.widgets_list:
-            self.grid.remove_widget(item)
-
     def _on_press(self, e):
         self._cancel_hold()
-        if self._in_menu(e.widget):
-            return                      # a menu button handles this press itself
-        self.hide_menu()                # a press anywhere else closes the menu
         self._src = None
         self._dragging = False
         self._origin = (e.x_root, e.y_root)
@@ -236,7 +185,7 @@ class GridDragger:
             self._size = (item["cols"], item["rows"])
 
         # Start the hold timer, unless the press landed on a button or slider
-        if not is_control(e.widget, tile):
+        if not self.editing and not is_control(e.widget, tile):
             self._hold_item = item
             self._hold_id = self._top.after(self.HOLD_MS, self._hold_fired)
 
@@ -250,7 +199,6 @@ class GridDragger:
             if moved < self.DRAG_THRESHOLD:
                 return
             self._dragging = True
-            self.hide_menu()
             width, height = self.grid.tile_size(*self._size)
             self._ghost.configure(text=self._src[1]["type"], width=width, height=height)
 
