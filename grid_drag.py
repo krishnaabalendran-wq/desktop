@@ -107,6 +107,8 @@ class GridDragger:
         self._grab = (0, 0) # pointer offset inside the dragged tile
         self._size = (1, 1) # (cols, rows) of whatever is being dragged
         self._dragging = False
+        self._resize_item = None
+        self._resize_target = None
         
         self.on_edit_request = None # called to switch edit more on/off
         self._hold_id = None 
@@ -137,6 +139,8 @@ class GridDragger:
 
     def cancel(self):
         """Stop any drag in progress."""
+        self._resize_item = None
+        self._resize_target = None
         self._cancel_hold()
         self._src = None
         self._dragging = False
@@ -165,6 +169,14 @@ class GridDragger:
         self._origin = (e.x_root, e.y_root)
         g = self.grid
 
+        # In edit mode, a press on a tile's corner grip resizes instead of a move.
+        if self.editing:
+            resize_item = find_widget(e.widget, g.resize_handles)
+            if resize_item is not None and resize_item["page_idx"] == g.current_page_idx:
+                self._resize_item = resize_item
+                self._resize_target = None
+                return
+
         spec = find_widget(e.widget, self._palette)
         if spec is not None:
             cols, rows = map(int, spec["size"].split("x"))
@@ -191,6 +203,10 @@ class GridDragger:
 
     def _on_motion(self, e):
         moved = abs(e.x_root - self._origin[0]) + abs(e.y_root - self._origin[1])
+        if self._resize_item is not None: # corner is being dragged
+            if moved >= self.DRAG_THRESHOLD or self._resize_target is not None:
+                self._update_resize(e)
+            return
         if self._hold_id is not None and moved >= self.DRAG_THRESHOLD:
             self._cancel_hold()         # the pointer moved, so this is not a hold
         if self._src is None:
@@ -208,6 +224,9 @@ class GridDragger:
 
     def _on_release(self, e):
         self._cancel_hold()
+        if self._resize_item is not None:
+            self._finish_resize()
+            return
         if self._src is None:
             return
         kind, src = self._src
@@ -290,3 +309,38 @@ class GridDragger:
         
         # Passes a boolean (True for valid drops, False for blocked overlaps)
         self._outline.show(x, y, width, height, bool(self._plan(r, c)))
+
+    def _update_resize(self, e):
+        """While corner is dragged, find the sze whose corner is nearest the pointer and outline."""
+        g = self.grid
+        item = self._resize_item
+        origin_x, origin_y = g.cell_origin(item["row"], item["col"])
+        half_padding = g.PADDING // 2
+
+        best_size, best_distance = None, None
+        for cols, rows in g.SIZES:
+            tile_width, tile_height = g.tile_size(cols, rows)
+            corner_x = origin_x + half_padding + tile_width
+            corner_y = origin_y + half_padding + tile_height
+            distance = (corner_x - e.x_root) ** 2 + (corner_y - e.y_root) ** 2
+            if best_distance is None or distance < best_distance:
+                best_size, best_distance = (cols, rows), distance
+
+        self._resize_target = best_size
+        cols, rows = best_size
+        width, height = g.tile_size(cols, rows)
+        x = origin_x - g.winfo_rootx() + half_padding
+        y = origin_y - g.winfo_rooty() + half_padding
+        self._outline.show(x, y, width, height, g.can_resize(item, cols, rows)) # green if fits, red if not
+
+    def _finish_resize(self):
+        """Corner let go and new size applies."""
+        item, target = self._resize_item, self._resize_target
+        self._resize_item = None
+        self._resize_target = None
+        self._outline.hide()
+        if target is None:
+            return
+        cols, rows = target
+        if (cols, rows) != (item["cols"], item["rows"]) and self.grid.can_resize(item, cols, rows):
+            self.grid.resize_widget(item, cols, rows)

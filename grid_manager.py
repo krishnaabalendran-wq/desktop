@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import tkinter as tk
 import time
 import math
 import random
@@ -19,6 +20,8 @@ class GridManager(ctk.CTkFrame):
     JIGGLE_FRAME_MS = 40 # time between shake frames
     JIGGLE_AMPLITUDE_PX = 2 # how far a tile moves from its resting spot
     JIGGLE_SPEED = 14 # how fast it shakes
+
+    SIZES = [(1, 1), (2, 1), (2, 2)]
 
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
@@ -41,6 +44,8 @@ class GridManager(ctk.CTkFrame):
         self.jiggling = False
         self._jiggle_timer_id = None
         self._jiggle_start_time = 0
+
+        self.resize_handles = {}
 
         self.current_base_w = 90
         self.current_base_h = 90
@@ -156,8 +161,6 @@ class GridManager(ctk.CTkFrame):
             w, h = self.tile_size(item["cols"], item["rows"])
             item["widget"].configure(width=w, height=h, corner_radius=Widget.CORNER_RADIUS)
 
-    # layout helpers
-
     @staticmethod
     def cells(r, c, cols, rows):
         return {(r + i, c + j) for i in range(rows) for j in range(cols)}
@@ -222,19 +225,23 @@ class GridManager(ctk.CTkFrame):
             "type": widget_type, "size": size, "bg": backgnd, "fg": font_color,
             "offset": (0,0), "jiggle_phase": random.uniform(0, 2 * math.pi),
             "badge": None,
+            "resize_handle": None,
         }
         self.widgets_list.append(item)
         self.tiles[tile] = item
         self._grid_item(item)
         self._create_delete_badge(item)
+        self._create_resize_handle(item)
         if self.jiggling:
             self._set_badge_visible(item, True)
+            self._set_handle_visible(item, True)
         self._sync_occupied()
         return item
  
     def remove_widget(self, item):
         self.widgets_list.remove(item)
         self.tiles.pop(item["widget"], None)
+        self.resize_handles.pop(item.get("resize_handle"), None)
         self._sync_occupied()
         self.after(1, item["widget"].destroy)       # after the current event finishes
  
@@ -254,6 +261,7 @@ class GridManager(ctk.CTkFrame):
         self.jiggling = on
         for item in self.widgets_list:
             self._set_badge_visible(item, on)
+            self._set_handle_visible(item, on)
 
         if on:
             self._jiggle_start_time = time.perf_counter()
@@ -300,3 +308,43 @@ class GridManager(ctk.CTkFrame):
             badge.lift()
         else:
             badge.place_forget()
+
+    def can_resize(self, item, cols, rows):
+        """True if item could become cols x rows where it is (inside the grid and not touching another tile)."""
+        fits = (item["row"] + rows <= self.MAX_ROWS and item["col"] + cols <= self.MAX_COLS)
+        return fits and not self.items_overlapping(item["page_idx"], item["row"], item["col"], cols, rows, ignore=(item,))
+
+    def resize_widget(self, item, cols, rows):
+        """Rebuild a tile at a new size. Tile gets built again from scratch."""
+        old_tile = item["widget"]
+        size = f"{cols}x{rows}"
+        width, height = self.tile_size(cols, rows)
+        new_tile = Widget(self.pages[item["page_idx"]], item["type"], size, width=width, height=height, bg=item["bg"], fg=item["fg"])
+
+        self.tiles.pop(old_tile, None)
+        self.resize_handles.pop(item.get("resize_handle"), None)
+        old_tile.grid_forget()
+
+        item.update(widget=new_tile, cols=cols, rows=rows, size=size, badge=None, resize_handle=None)
+        self.tiles[new_tile] = item
+        self._grid_item(item)
+        self._create_delete_badge(item)
+        self._create_resize_handle(item)
+        if self.jiggling:
+            self._set_badge_visible(item, True)
+            self._set_handle_visible(item, True)
+        self._sync_occupied()
+        self.after(1, old_tile.destroy)
+
+    def _create_resize_handle(self, item):
+        handle = tk.Canvas(item["widget"], width=18, height=18, bg="#e8e8e8", highlightthickness=0)
+        handle.create_polygon(16, 2, 16, 16, 2, 16, fill="#121212", outline="")
+        item["resize_handle"] = handle
+        self.resize_handles[handle] = item # lets GridDragger find which tile a press belongs to
+
+    def _set_handle_visible(self, item, visible):
+        handle = item["resize_handle"]
+        if visible:
+            handle.place(relx=1.0, rely=1.0, x=-3, y=-3, anchor="se")
+        else:
+            handle.place_forget()
