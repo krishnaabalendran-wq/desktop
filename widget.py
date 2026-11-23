@@ -1,15 +1,20 @@
 import calendar
 import math
 import os
+import platform
 import random
+import subprocess
 import threading
 import time
 import tkinter as tk
 from datetime import datetime
+from urllib.parse import quote_plus
 
 import customtkinter as ctk
+import pyttsx3
 import requests
-from PIL import Image, ImageTk
+import speech_recognition as sr
+from PIL import Image, ImageTk, ImageDraw
 
 try:
     import psutil
@@ -44,6 +49,20 @@ NOTIFY_MESSAGES = [        # (button label, text that gets sent). 1x1 and 2x1 us
     ("Coffee?", "Coffee break? Meet me in the kitchen"),
 ]
 
+# voiceassistant voice assistant settings
+voiceassistant_WAKE_WORDS = ["computer", "voiceassistant"]
+voiceassistant_EXIT_WORDS = ["exit", "bye", "stop"]
+voiceassistant_YOUTUBE_WORDS = ["youtube", "play", "watch", "video", "videos", "a video"]
+voiceassistant_GOOGLE_WORDS = ["google", "search", "look up", "find", "go to", "go on"]
+
+voiceassistant_WEBSITES = {
+    "brightspace": "https://brightspace.carleton.ca/",
+    "gemini": "https://gemini.google.com/",
+    "youtube": "https://www.youtube.com/",
+    "google": "https://www.google.com/",
+    "github": "https://github.com/",
+}
+
 
 def _hex_to_rgb(h):
     h = h.lstrip("#")
@@ -51,17 +70,16 @@ def _hex_to_rgb(h):
 
 
 class CornerGlowCanvas(tk.Canvas):
-    """Animated gradient: the theme colour in the top left, fading to near-black across the tile."""
+    """Soft ambient corner radial glow with rounded corners matching the tile."""
 
-    def __init__(self, master, width, height, bg_hex, fg_hex=None, fps=20):
-        # We inset by 1px so the CustomTkinter border is not covered
+    def __init__(self, master, width, height, bg_hex, fg_hex=None, fps=20, corner_radius=12):
         super().__init__(master, width=width-2, height=height-2, highlightthickness=0, bd=0, bg="#0a0a0a")
         self.w = width - 2
         self.h = height - 2
+        self.corner_radius = corner_radius
 
-        # Override the base background to be very dark (mostly black)
         self.bg_rgb = _hex_to_rgb("#0a0a0a")
-        self.glow_rgb = _hex_to_rgb(bg_hex)   # the theme colour, shown at the top-left
+        self.glow_rgb = _hex_to_rgb(bg_hex)
 
         self.phase = random.uniform(0, math.pi * 2)
         self.delay = int(1000 / fps)
@@ -73,13 +91,14 @@ class CornerGlowCanvas(tk.Canvas):
         self._animate()
 
     def _get_color_at(self, nx, ny, pulse):
+        # Distance from top-left corner (0,0) for the radial glow effect
         dist = math.sqrt(nx**2 + ny**2)
-        glow_spread = 1.4 + 0.2 * pulse
-        # Non-linear falloff (cube) so the white stays in the corner and it's mostly black
-        intensity = max(0.0, 1.0 - dist * glow_spread) ** 3.0
-        blend_factor = intensity   # 1.0 at the top-left corner, so it shows the full theme colour
-
-        return tuple(int(base * (1 - blend_factor) + glow * blend_factor)
+        glow_spread = 1.2 + 0.15 * pulse
+        
+        # Smooth exponential falloff for an ambient lighting feel
+        intensity = max(0.0, 1.0 - dist * glow_spread) ** 2.2
+        
+        return tuple(int(base * (1 - intensity) + glow * intensity)
                      for base, glow in zip(self.bg_rgb, self.glow_rgb))
 
     def _animate(self):
@@ -87,10 +106,10 @@ class CornerGlowCanvas(tk.Canvas):
             return
 
         t = time.time()
-        pulse = 0.5 + 0.5 * math.sin(t * 1.2 + self.phase)
+        pulse = 0.5 + 0.5 * math.sin(t * 1.5 + self.phase)
 
-        # Render a tiny 16x16 image and let PIL Bicubic sampling smooth it perfectly
-        gw, gh = 16, 16
+        # Render a compact 24x24 sample grid and let PIL Bicubic smoothing blend it
+        gw, gh = 24, 24
         img = Image.new("RGB", (gw, gh))
         px = img.load()
         for y in range(gh):
@@ -100,7 +119,17 @@ class CornerGlowCanvas(tk.Canvas):
                 px[x, y] = self._get_color_at(nx, ny, pulse)
 
         full_img = img.resize((max(1, self.w), max(1, self.h)), Image.Resampling.BICUBIC)
-        self._photo = ImageTk.PhotoImage(full_img)
+        
+        # Apply smooth rounded corners mask matching the tile's corner radius
+        mask = Image.new("L", (self.w, self.h), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rounded_rectangle([0, 0, self.w, self.h], radius=self.corner_radius, fill=255)
+        
+        output_img = Image.new("RGBA", (self.w, self.h))
+        output_img.paste(full_img, (0, 0))
+        output_img.putalpha(mask)
+        
+        self._photo = ImageTk.PhotoImage(output_img)
         self.itemconfig(self._img_id, image=self._photo)
 
         self.after(self.delay, self._animate)
@@ -109,7 +138,7 @@ class CornerGlowCanvas(tk.Canvas):
 class Widget(ctk.CTkFrame):
     """A single dashboard tile. Each widget type has its own build_* function."""
 
-    CORNER_RADIUS = 0
+    CORNER_RADIUS = 12
     TEXT_PAD_X = 18
     TEXT_PAD_Y = 15
 
@@ -146,6 +175,7 @@ class Widget(ctk.CTkFrame):
             "Notify": self.build_notify,
             "Date": self.build_date,
             "System": self.build_system,
+            "voiceassistant": self.build_voiceassistant,
         }
         builders.get(widget_type, self.build_default)()
 
@@ -722,6 +752,449 @@ class Widget(ctk.CTkFrame):
             tag = " CHG" if battery.power_plugged else ""
             return battery.percent, f"{battery.percent:.0f}%{tag}"
         return pct, f"{pct:.0f}%"
+
+    # ============================================
+    # voiceassistant VOICE ASSISTANT
+    #    1x1 -> status + Listen/Stop button
+    #    2x1 -> status + heard command + Listen/Stop button
+    #    2x2 -> status + heard command + assistant reply + Listen/Stop button
+    # ============================================
+    def build_voiceassistant(self):
+        self.add_title("voiceassistant")
+        dim = blend(self.fg, self.bg, 0.35)
+        self._voiceassistant_dim = dim
+        self._voiceassistant_running = False
+        self._voiceassistant_thread = None
+
+        self._voiceassistant_recognizer = sr.Recognizer()
+        self._voiceassistant_recognizer.pause_threshold = 1.6
+        self._voiceassistant_recognizer.non_speaking_duration = 0.8
+        self._voiceassistant_recognizer.phrase_threshold = 0.2
+
+        self.voiceassistant_state_label = self._weather_label(
+            text="IDLE", font_size=10, colour=dim, bold=True,
+            relx=1.0, x=-self.TEXT_PAD_X, y=self.TEXT_PAD_Y, anchor="ne"
+        )
+
+        btn_style = dict(
+            height=28, corner_radius=0, text_color=self.fg,
+            fg_color=blend(self.bg, self.fg, 0.25),
+            hover_color=blend(self.fg, self.bg, 0.4),
+            font=mono(11, True),
+        )
+
+        self.voiceassistant_heard_label = None
+        self.voiceassistant_reply_label = None
+
+        if self.size == "1x1":
+            self.voiceassistant_heard_label = self._weather_label(
+                text='Say "computer..."', font_size=10, colour=dim, wrap=120,
+                relx=0.5, rely=0.48, anchor="center"
+            )
+            self.voiceassistant_btn = ctk.CTkButton(
+                self, text="Listen", command=self.voiceassistant_toggle, **btn_style
+            )
+            self.voiceassistant_btn.place(relx=0.5, rely=0.82, relwidth=0.84, anchor="center")
+
+        elif self.size == "2x1":
+            self.voiceassistant_heard_label = self._weather_label(
+                text='Say "computer" + command', font_size=11, colour=self.fg,
+                justify="left", wrap=190,
+                relx=0.0, x=self.TEXT_PAD_X, rely=0.48, anchor="w"
+            )
+            self.voiceassistant_reply_label = self._weather_label(
+                text="Ready", font_size=10, colour=dim,
+                justify="left", wrap=190,
+                relx=0.0, x=self.TEXT_PAD_X, rely=0.78, anchor="w"
+            )
+            self.voiceassistant_btn = ctk.CTkButton(
+                self, text="Listen", command=self.voiceassistant_toggle, **btn_style
+            )
+            self.voiceassistant_btn.place(relx=0.84, rely=0.60, relwidth=0.24, anchor="center")
+
+        else:  # 2x2
+            self.voiceassistant_heard_label = self._weather_label(
+                text='Say "computer" or "voiceassistant"...', font_size=12, colour=self.fg,
+                justify="left", wrap=280,
+                relx=0.0, x=self.TEXT_PAD_X, rely=0.34, anchor="w"
+            )
+            ctk.CTkFrame(
+                self, height=1, corner_radius=0,
+                fg_color=blend(self.bg, self.fg, 0.2)
+            ).place(relx=0.5, rely=0.50, anchor="center", relwidth=0.88)
+
+            self.voiceassistant_reply_label = self._weather_label(
+                text="Click Listen to start voice control.", font_size=11, colour=dim,
+                justify="left", wrap=280,
+                relx=0.0, x=self.TEXT_PAD_X, rely=0.65, anchor="w"
+            )
+            self.voiceassistant_btn = ctk.CTkButton(
+                self, text="Listen", command=self.voiceassistant_toggle, **btn_style
+            )
+            self.voiceassistant_btn.place(relx=0.5, rely=0.86, relwidth=0.88, anchor="center")
+
+    def _voiceassistant_ui_update(self, state=None, heard=None, reply=None, running=None):
+        """Thread-safe helper to update voiceassistant labels on the main Tkinter thread."""
+        def _apply():
+            if not self.winfo_exists():
+                return
+            if state is not None:
+                self.voiceassistant_state_label.configure(
+                    text=state,
+                    text_color=self.fg if state in ("LISTENING", "SPEAKING") else self._voiceassistant_dim
+                )
+            if heard is not None and self.voiceassistant_heard_label is not None:
+                self.voiceassistant_heard_label.configure(text=heard)
+            if reply is not None and self.voiceassistant_reply_label is not None:
+                self.voiceassistant_reply_label.configure(text=reply)
+            if running is not None:
+                self.voiceassistant_btn.configure(text="Stop" if running else "Listen")
+
+        try:
+            self.after(0, _apply)
+        except Exception:
+            pass
+
+    def voiceassistant_toggle(self):
+        if self._voiceassistant_running:
+            self._voiceassistant_running = False
+            self._voiceassistant_ui_update(state="IDLE", reply="Stopped.", running=False)
+        else:
+            self._voiceassistant_running = True
+            self._voiceassistant_ui_update(state="CALIBRATING", reply="Calibrating mic...", running=True)
+            self._voiceassistant_thread = threading.Thread(target=self._voiceassistant_loop, daemon=True)
+            self._voiceassistant_thread.start()
+
+    @staticmethod
+    def _voiceassistant_open_url(url):
+        if platform.system() == "Darwin":
+            subprocess.run(["open", "-a", "/Applications/Google Chrome.app", url])
+        else:
+            import webbrowser
+            webbrowser.open(url)
+
+    def _voiceassistant_speak(self, text):
+        print(f"Assistant: {text}")
+        self._voiceassistant_ui_update(state="SPEAKING", reply=text)
+        if platform.system() == "Darwin":
+            subprocess.run(["say", text])
+        else:
+            engine = pyttsx3.init()
+            engine.say(text)
+            engine.runAndWait()
+        time.sleep(0.6)
+
+    def _voiceassistant_wish_user(self):
+        hour = datetime.now().hour
+        if hour < 12:
+            self._voiceassistant_speak("Good Morning!")
+        elif hour < 18:
+            self._voiceassistant_speak("Good Afternoon!")
+        else:
+            self._voiceassistant_speak("Good Evening!")
+        self._voiceassistant_speak("All systems nominal. Say computer followed by a command.")
+
+    def _voiceassistant_take_command(self):
+        if not self._voiceassistant_running or not self.winfo_exists():
+            return ""
+        self._voiceassistant_ui_update(state="LISTENING")
+        try:
+            with sr.Microphone() as source:
+                audio = self._voiceassistant_recognizer.listen(source, timeout=2, phrase_time_limit=12)
+        except sr.WaitTimeoutError:
+            return ""
+        except Exception:
+            return ""
+
+        if not self._voiceassistant_running or not self.winfo_exists():
+            return ""
+
+        self._voiceassistant_ui_update(state="RECOGNIZING")
+        try:
+            query = self._voiceassistant_recognizer.recognize_google(audio, language="en-US")
+            print(f"You: {query}")
+            cleaned = query.lower().strip()
+            self._voiceassistant_ui_update(heard=f"You: {cleaned}")
+            return cleaned
+        except sr.UnknownValueError:
+            return ""
+        except sr.RequestError:
+            self._voiceassistant_speak("Speech service is unavailable right now.")
+            return ""
+
+    @staticmethod
+    def _voiceassistant_remove_wake_word(query):
+        for word in voiceassistant_WAKE_WORDS:
+            if query == word:
+                return ""
+            if query.startswith(word + " "):
+                return query[len(word):].strip()
+            if query.startswith(word + ","):
+                return query[len(word) + 1:].strip()
+        return None
+
+    @staticmethod
+    def _voiceassistant_get_direct_website(command):
+        prefixes = ["go to ", "go on ", "open up ", "open "]
+        target = command
+
+        for prefix in prefixes:
+            if target.startswith(prefix):
+                target = target[len(prefix):].strip()
+                break
+
+        if target in voiceassistant_WEBSITES:
+            return target, voiceassistant_WEBSITES[target]
+
+        return None, None
+
+    @staticmethod
+    def _voiceassistant_get_destination(command):
+        if "youtube" in command:
+            return "youtube"
+        if "google" in command:
+            return "google"
+
+        cleaned = command
+        used_open = False
+        if cleaned.startswith("open up "):
+            cleaned = cleaned[len("open up "):].strip()
+            used_open = True
+        elif cleaned.startswith("open "):
+            cleaned = cleaned[len("open "):].strip()
+            used_open = True
+
+        for word in voiceassistant_YOUTUBE_WORDS:
+            if cleaned == word or cleaned.startswith(word + " "):
+                return "youtube"
+
+        for word in voiceassistant_GOOGLE_WORDS:
+            if cleaned == word or cleaned.startswith(word + " "):
+                return "google"
+
+        if used_open and cleaned != "":
+            return "google"
+
+        return None
+
+    @staticmethod
+    def _voiceassistant_get_search_query(command, destination):
+        text = command
+
+        openings = [
+            f"go on {destination} and",
+            f"go to {destination} and",
+            f"go on {destination}",
+            f"go to {destination}",
+            f"open up {destination} and",
+            f"open {destination} and",
+            f"open up {destination}",
+            f"open {destination}",
+            destination,
+        ]
+        for opening in openings:
+            if text == opening:
+                return ""
+            if text.startswith(opening + " "):
+                text = text[len(opening):].strip()
+                break
+
+        endings = [
+            f"on {destination}",
+            f"in {destination}",
+            f"to {destination}",
+            destination,
+        ]
+        for ending in endings:
+            if text.endswith(" " + ending):
+                text = text[:-len(ending)].strip()
+                break
+
+        front_phrases = [
+            "search up",
+            "search for",
+            "look up",
+            "a video of",
+            "videos of",
+            "video of",
+            "open up",
+        ]
+        front_words = [
+            "go", "to", "open", "search", "google", "youtube",
+            "play", "watch", "find", "up", "for", "on", "about", "and",
+        ]
+
+        keeping_cleaning = True
+        while keeping_cleaning and text != "":
+            keeping_cleaning = False
+
+            for phrase in front_phrases:
+                if text == phrase:
+                    return ""
+                if text.startswith(phrase + " "):
+                    text = text[len(phrase):].strip()
+                    keeping_cleaning = True
+                    break
+
+            if not keeping_cleaning:
+                words = text.split()
+                if words[0] in front_words:
+                    words.pop(0)
+                    text = " ".join(words)
+                    keeping_cleaning = True
+
+        return text
+
+    @staticmethod
+    def _voiceassistant_get_weather(city=WEATHER_CITY):
+        try:
+            geo = requests.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": city, "count": 1},
+                timeout=8,
+            ).json()
+
+            if not geo.get("results"):
+                return f"I couldn't find weather data for {city}."
+
+            place = geo["results"][0]
+            lat, lon = place["latitude"], place["longitude"]
+            resolved_name = place.get("name", city)
+
+            data = requests.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current": "temperature_2m,apparent_temperature,weather_code",
+                    "timezone": "auto",
+                },
+                timeout=8,
+            ).json()
+
+            cur = data["current"]
+            temp = round(cur["temperature_2m"])
+            feels = round(cur["apparent_temperature"])
+            condition = WEATHER_CODES.get(cur["weather_code"], "clear").lower()
+            return f"It is currently {temp} degrees and {condition} in {resolved_name}, feeling like {feels}."
+        except Exception:
+            return "Sorry, I couldn't check the weather right now."
+
+    def _voiceassistant_loop(self):
+        try:
+            with sr.Microphone() as source:
+                self._voiceassistant_recognizer.adjust_for_ambient_noise(source, duration=1.0)
+                self._voiceassistant_recognizer.dynamic_energy_threshold = False
+        except Exception as e:
+            self._voiceassistant_running = False
+            self._voiceassistant_ui_update(state="ERROR", reply=f"Mic error: {e}", running=False)
+            return
+
+        if not self._voiceassistant_running or not self.winfo_exists():
+            return
+
+        self._voiceassistant_wish_user()
+
+        while self._voiceassistant_running and self.winfo_exists():
+            raw_query = self._voiceassistant_take_command()
+
+            if raw_query == "":
+                continue
+            if raw_query.startswith("opening ") or raw_query.startswith("searching "):
+                continue
+
+            command = self._voiceassistant_remove_wake_word(raw_query)
+            if command is None:
+                continue
+
+            if command == "":
+                self._voiceassistant_speak("Yes?")
+                command = self._voiceassistant_take_command()
+                if command == "":
+                    continue
+                second_check = self._voiceassistant_remove_wake_word(command)
+                if second_check is not None:
+                    command = second_check
+
+            words = command.split()
+            if len(words) > 0 and words[0] in voiceassistant_EXIT_WORDS:
+                self._voiceassistant_speak("Goodbye! Have a nice day!")
+                self._voiceassistant_running = False
+                self._voiceassistant_ui_update(state="IDLE", running=False)
+                break
+
+            if command in ["hello", "hi", "hey"]:
+                self._voiceassistant_speak("Hello! How can I help you?")
+                continue
+
+            if "how are you" in command:
+                self._voiceassistant_speak("I am doing well and ready to help.")
+                continue
+
+            if "who are you" in command or "your name" in command:
+                self._voiceassistant_speak("I am voiceassistant, your voice assistant.")
+                continue
+
+            if command.startswith("say "):
+                phrase = command[len("say "):].strip()
+                if phrase == "hello":
+                    self._voiceassistant_speak("Greetings, all.")
+                elif phrase != "":
+                    self._voiceassistant_speak(phrase)
+                continue
+
+            if "date" in command or "day is it" in command:
+                today = datetime.now().strftime("%A, %B %d, %Y")
+                self._voiceassistant_speak(f"Today is {today}")
+                continue
+
+            if "time" in command:
+                current_time = datetime.now().strftime("%I:%M %p")
+                self._voiceassistant_speak(f"The current time is {current_time}")
+                continue
+
+            if "weather" in command or "temperature" in command:
+                city = WEATHER_CITY
+                if " in " in command:
+                    spoken_city = command.split(" in ", 1)[1].strip()
+                    if spoken_city != "":
+                        city = spoken_city
+                self._voiceassistant_speak("Checking the weather...")
+                report = self._voiceassistant_get_weather(city)
+                self._voiceassistant_speak(report)
+                continue
+
+            site_name, site_url = self._voiceassistant_get_direct_website(command)
+            if site_url is not None:
+                self._voiceassistant_speak(f"Opening {site_name.capitalize()}...")
+                self._voiceassistant_open_url(site_url)
+                continue
+
+            destination = self._voiceassistant_get_destination(command)
+            if destination is not None:
+                search_query = self._voiceassistant_get_search_query(command, destination)
+
+                if search_query != "":
+                    encoded_query = quote_plus(search_query)
+                    if destination == "google":
+                        url = f"https://www.google.com/search?q={encoded_query}"
+                        self._voiceassistant_speak(f"Searching Google for {search_query}...")
+                    else:
+                        url = f"https://www.youtube.com/results?search_query={encoded_query}"
+                        self._voiceassistant_speak(f"Searching YouTube for {search_query}...")
+                    self._voiceassistant_open_url(url)
+                else:
+                    if destination == "google":
+                        self._voiceassistant_speak("Opening Google...")
+                        self._voiceassistant_open_url("https://www.google.com/")
+                    else:
+                        self._voiceassistant_speak("Opening YouTube...")
+                        self._voiceassistant_open_url("https://www.youtube.com/")
+                continue
+
+            self._voiceassistant_speak("Sorry, I didn't understand that. Try again.")
+
+        self._voiceassistant_ui_update(state="IDLE", running=False)
 
     # ---------- callbacks ----------
     def on_volume_change(self, value):
