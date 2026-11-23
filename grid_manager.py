@@ -18,7 +18,7 @@ class GridManager(ctk.CTkFrame):
     SLIDE_FRAME_DELAY = 16 # wait between animation frames
 
     JIGGLE_FRAME_MS = 40 # time between shake frames
-    JIGGLE_AMPLITUDE_PX = 2 # how far a tile moves from its resting spot
+    JIGGLE_AMPLITUDE_PX = 1 # how far a tile moves from its resting spot
     JIGGLE_SPEED = 14 # how fast it shakes
 
     SIZES = [(1, 1), (2, 1), (2, 2)]
