@@ -1,21 +1,52 @@
 import calendar
+import importlib.util
 import math
 import os
 import platform
 import random
+import re
+import shutil
 import subprocess
+import sys
 import threading
 import time
 import tkinter as tk
 from datetime import datetime
 from urllib.parse import quote_plus
 
+def ensure_packages():
+    packages = [
+        ("customtkinter", "customtkinter"),
+        ("pyttsx3", "pyttsx3"),
+        ("requests", "requests"),
+        ("speech_recognition", "SpeechRecognition"),
+        ("pyaudio", "PyAudio"),
+        ("PIL", "Pillow"),
+        ("psutil", "psutil"),
+    ]
+
+    for import_name, pip_name in packages:
+        if importlib.util.find_spec(import_name) is not None:
+            continue
+
+        print(f"Installing {pip_name}...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
+        except subprocess.CalledProcessError:
+            if pip_name == "PyAudio" and platform.system() == "Darwin" and shutil.which("brew"):
+                subprocess.check_call(["brew", "install", "portaudio"])
+                subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
+            else:
+                raise
+
+
+ensure_packages()
+
 import customtkinter as ctk
 import pyttsx3
 import requests
 import speech_recognition as sr
 from PIL import Image, ImageTk, ImageDraw
-
 try:
     import psutil
 except ImportError:
