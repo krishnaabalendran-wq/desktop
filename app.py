@@ -253,7 +253,7 @@ class App(ctk.CTk):
         
         self.automation_overlay = AutomationOverlay(self)
         self.automation_overlay.covered = [self.topbar_frame, self.grid_manager]
-        self.scene_runner = SceneRunner(context=SceneContext(go_to_page=self._scene_go_to_page, copy_to_clipboard=self._scene_copy_text), schedule=self.after, cancel_schedule=self.after_cancel, on_change=self.automation_overlay.refresh, on_finished=self.on_scene_finished, apply_layout=self.apply_layout_preset)
+        self.scene_runner = SceneRunner(context=SceneContext(go_to_page=self._scene_go_to_page, copy_to_clipboard=self._scene_copy_text, apply_layout=self.apply_layout_preset), schedule=self.after, cancel_schedule=self.after_cancel, on_change=self.automation_overlay.refresh, on_finished=self.on_scene_finished, apply_layout=self.apply_layout_preset)
         
         self.bind("<Configure>", self.on_window_configure)
         
@@ -518,7 +518,6 @@ class App(ctk.CTk):
             self.color_menu_is_open = True
 
     def hide_menus(self):
-        print("hide menu called")
         self.popout_menu.place_forget()
         self.size_menu.place_forget()
         self.color_menu.place_forget()

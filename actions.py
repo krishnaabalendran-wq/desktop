@@ -15,9 +15,10 @@ PAGE_COUNT = 3
 class SceneContext:
     "The few things a step may need from the app window. The App fills these in."
 
-    def __init__(self, go_to_page=None, copy_to_clipboard=None):
+    def __init__(self, go_to_page=None, copy_to_clipboard=None, apply_layout=None):
         self.go_to_page = go_to_page
         self.copy_to_clipboard = copy_to_clipboard
+        self.apply_layout = apply_layout
 
 class StepOutcome:
     """How a finished step went."""

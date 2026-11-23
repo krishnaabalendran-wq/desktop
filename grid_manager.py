@@ -220,7 +220,7 @@ class GridManager(ctk.CTkFrame):
                     cols, rows = map(int, entry["size"].split("x"))
                     if (0 <= page < len(self.pages) and row >= 0 and col >= 0 and row + rows <= self.MAX_ROWS and col + cols <= self.MAX_COLS):
                         self.current_page_idx = page
-                        placed = self.add_widget(entry["type"], entry["size"], entry["fg"], at=(row, col))
+                        placed = self.add_widget(entry["type"], entry["size"], entry["bg"], entry["fg"], at=(row, col))
                 except (KeyError, ValueError, TypeError, AttributeError):
                     pass
                 if placed is None:
