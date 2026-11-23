@@ -330,8 +330,6 @@ class App(ctk.CTk):
     def on_window_configure(self, event):
         if event.widget == self:
             self.grid_manager.on_configure()
-            if self.settings_is_open:
-                self.size_settings_panel()
 
     def create_widget_menus(self):
         self.popout_menu = ctk.CTkFrame(self, width=160, height=250, corner_radius=0, fg_color=SURFACE,
@@ -368,18 +366,16 @@ class App(ctk.CTk):
                                            border_width=1, border_color=BORDER)
         self.settings_panel.pack_propagate(False)
 
-        header = ctk.CTkFrame(self.settings_panel, fg_color="transparent")
-        header.pack(fill="x", padx=15, pady=(12, 6))
-        ctk.CTkLabel(header, text="SETTINGS", font=mono(14, True),
-                     text_color=TEXT).pack(side="left")
-        ctk.CTkButton(header, text="\u2715", width=28, height=28, corner_radius=0,
-                      border_width=1, border_color=BORDER, text_color=TEXT,
-                      fg_color=BTN, hover_color=BTN_HOVER,
-                      command=self.hide_menus).pack(side="right")
-                      
-        # --- SETTINGS MODE TOGGLE ---
-        settings_body = ctk.CTkFrame(self.settings_panel, fg_color="transparent")
-        settings_body.pack(fill="both", expand=True, padx=15, pady=10)
+        self.settings_window = ctk.CTkToplevel(self, fg_color=SURFACE)
+        self.settings_window.title("Settings")
+        self.settings_window.geometry("300x460")
+        self.settings_window.minsize(260, 320)
+        self.settings_window.transient(self)
+        self.settings_window.withdraw()
+        self.settings_window.protocol("WM_DELETE_WINDOW", self.close_settings)
+
+        settings_body = ctk.CTkFrame(self.settings_window, fg_color="transparent")
+        settings_body.pack(fill="both", expand=True, padx=15, pady=15)
         
         mode_label = ctk.CTkLabel(settings_body, text="APPEARANCE", font=mono(11, True), text_color=DIM)
         mode_label.pack(anchor="w", pady=(10, 5))
@@ -454,17 +450,23 @@ class App(ctk.CTk):
             self.hide_menus()
 
     def toggle_settings_panel(self):
-        if self.settings_is_open:
-            self.hide_menus()
-            return
-        self.hide_menus()
-        self.size_settings_panel()
-        self.settings_panel.place(relx=1.0, rely=0.0, x=-10, y=65, anchor="ne")
-        self.settings_panel.lift()
-        self.settings_is_open = True
+        if self.settings_window.winfo_viewable():
+            self.close_settings()
+        else:
+            self.open_settings()
 
-    def size_settings_panel(self):
-        self.settings_panel.configure(height=max(250, self.winfo_height() - 75))
+    def open_settings(self):
+        self.hide_menus()
+        width, height = 300, 460
+        x = self.winfo_rootx() + self.winfo_width() - width - 10
+        y = self.winfo_rooty() + 65
+        self.settings_window.geometry(f"{width}x{height}+{x}+{y}")
+        self.settings_window.deiconify()
+        self.settings_window.lift()
+        self.settings_window.focus_force()
+
+    def close_settings(self):
+        self.settings_window.withdraw()
 
     def toggle_size_menu(self, widget_type, sizes):
         self.color_menu.place_forget()
@@ -531,11 +533,9 @@ class App(ctk.CTk):
         self.popout_menu.place_forget()
         self.size_menu.place_forget()
         self.color_menu.place_forget()
-        self.settings_panel.place_forget()
         self.menu_is_open = False
         self.size_menu_is_open = False
         self.color_menu_is_open = False
-        self.settings_is_open = False
 
     def add_themed_widget(self, bg_color, font_color):
         if self.pending_widget_type and self.pending_size:
@@ -595,13 +595,15 @@ class App(ctk.CTk):
         if self.grid_manager.drag.editing:
             self.toggle_edit_mode()
         self.hide_menus()
+        self.close_settings()
         return self.grid_manager.apply_snapshot(preset["widgets"])
 
     def run_scene(self, scene):
         """Run a scene."""
         if self.scene_runner.is_running:
             return                                   # one scene at a time
-        self.hide_menus()                            # close any open menus first
+        self.hide_menus()    
+        self.close_settings()                        # close any open menus first
         self.grid_manager.drag.cancel()              # drop any drag in progress
         self.automation_overlay.show(self.scene_runner)
         self.scene_runner.start(scene)

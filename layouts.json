@@ -1,0 +1,19 @@
+{
+  "layouts": [
+    {
+      "id": "notify",
+      "name": "notify",
+      "widgets": [
+        {
+          "type": "Notify",
+          "size": "2x2",
+          "bg": "#2b2216",
+          "fg": "#ffcc80",
+          "page": 0,
+          "r": 0,
+          "c": 0
+        }
+      ]
+    }
+  ]
+}
