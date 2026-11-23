@@ -197,6 +197,38 @@ class GridManager(ctk.CTkFrame):
         x, y, _, _ = page.grid_bbox(c, r)
         return page.winfo_rootx() + x, page.winfo_rooty() + y
 
+    def snapshot(self):
+            """The current layout as data."""
+            return [{"type": it["type"], "size": it["size"], "bg": it["bg"], "fg": it["fg"], "page": it["page_idx"], "r": it["row"], "c": it["col"]} for it in self.widgets_list]
+
+    def clear_all(self):
+        for item in list(self.widgets_list):
+            self.remove_widget(item)
+
+    def apply_snapshot(self, layout):
+        """Replace every widget with the ones in layout. Entries that are malformed, off the grid or overlapping are skipped."""
+        self.drag.cancel()
+        self.clear_all()
+        shown_page = self.current_page_idx
+        skipped = 0
+        try:
+            for entry in layout:
+                placed = None
+                try:
+                    page = int(entry.get("page", 0))
+                    row, col = int(entry["r"]), int(entry["c"])
+                    cols, rows = map(int, entry["size"].split("x"))
+                    if (0 <= page < len(self.pages) and row >= 0 and col >= 0 and row + rows <= self.MAX_ROWS and col + cols <= self.MAX_COLS):
+                        self.current_page_idx = page
+                        placed = self.add_widget(entry["type"], entry["size"], entry["fg"], at=(row, col))
+                except (KeyError, ValueError, TypeError, AttributeError):
+                    pass
+                if placed is None:
+                    skipped += 1
+        finally:
+            self.current_page_idx = shown_page
+        return skipped
+
     # changing the layout
 
     def add_widget(self, widget_type="Widget", size="1x1", backgnd="#22242a",

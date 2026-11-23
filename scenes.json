@@ -1,0 +1,84 @@
+{
+  "scenes": [
+    {
+      "id": "start-of-day",
+      "name": "Start of day",
+      "color": "#17492b",
+      "steps": [
+        {
+          "type": "open_link",
+          "url": "https://calendar.google.com"
+        },
+        {
+          "type": "go_to_page",
+          "page": 1
+        },
+        {
+          "type": "message",
+          "text": "Ready for the day"
+        }
+      ]
+    },
+    {
+      "id": "presentation",
+      "name": "Presentation",
+      "color": "#1b3a6b",
+      "steps": [
+        {
+          "type": "set_volume",
+          "percent": 10
+        },
+        {
+          "type": "go_to_page",
+          "page": 2
+        },
+        {
+          "type": "wait",
+          "seconds": 3
+        },
+        {
+          "type": "message",
+          "text": "Good luck!"
+        }
+      ]
+    },
+    {
+      "id": "deep-work",
+      "name": "Deep work",
+      "color": "#5a4410",
+      "steps": [
+        {
+          "type": "set_volume",
+          "percent": 20
+        },
+        {
+          "type": "go_to_page",
+          "page": 3
+        },
+        {
+          "type": "message",
+          "text": "Focus time"
+        }
+      ]
+    },
+    {
+      "id": "leaving",
+      "name": "Leaving",
+      "color": "#4a2a5a",
+      "steps": [
+        {
+          "type": "go_to_page",
+          "page": 1
+        },
+        {
+          "type": "copy_text",
+          "text": "I'm out of the office and will reply tomorrow."
+        },
+        {
+          "type": "message",
+          "text": "See you tomorrow"
+        }
+      ]
+    }
+  ]
+}

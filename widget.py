@@ -19,6 +19,7 @@ except ImportError:
 from style import mono
 from utils import blend
 from volume import read_system_volume, set_system_volume
+from scenes import load_scenes, get_scene_color
 
 WEATHER_CITY = "Ottawa"                 # change to your city
 WEATHER_REFRESH_MS = 10 * 60 * 1000      # refresh every 10 minutes
@@ -146,6 +147,7 @@ class Widget(ctk.CTkFrame):
             "Notify": self.build_notify,
             "Date": self.build_date,
             "System": self.build_system,
+            "Scenes": self.build_scenes
         }
         builders.get(widget_type, self.build_default)()
 
@@ -268,12 +270,6 @@ class Widget(ctk.CTkFrame):
         self.volume_label.configure(text=f"{current}%")
         self.volume_slider.place(relx=0.5, rely=0.45, anchor="center", relwidth=0.75)
 
-    # ============================================
-    # WEATHER LAYOUTS
-    #   1x1 -> temp + condition
-    #   2x1 -> temp + condition + city + details
-    #   2x2 -> temp + condition + city + details + 3-day
-    # ============================================
 
     def build_weather(self):
         dim = blend(self.fg, self.bg, 0.35)
@@ -363,10 +359,7 @@ class Widget(ctk.CTkFrame):
             )
             self.forecast_labels.append(label)
 
-    # ============================================
-    # TIMER
-    #    wider sizes have - / + buttons to change length
-    # ============================================
+
     def build_timer(self):
         self.timer_total = 5 * 60   # default: 5 minutes
         self.timer_left = self.timer_total
@@ -800,3 +793,82 @@ class Widget(ctk.CTkFrame):
                 high = round(daily["temperature_2m_max"][day_index])
                 low = round(daily["temperature_2m_min"][day_index])
                 label.configure(text=f"{day}\n{high}\u00b0 / {low}\u00b0")
+
+
+    def build_scenes(self):
+        self.add_title("Scenes")
+
+        # How the buttons are laid out depends on the tile size
+        if self.size == "2x2":
+            self.scenes_columns, self.scenes_rows, self.scenes_button_height = 2, 4, 44
+        elif self.size == "2x1":
+            self.scenes_columns, self.scenes_rows, self.scenes_button_height = 2, 2, 32
+        else:                                            # 1x1
+            self.scenes_columns, self.scenes_rows, self.scenes_button_height = 1, 2, 30
+
+        self.scene_list = load_scenes()                  # read once, when the tile is built
+        self.scenes_page_index = 0                       # which group of scenes is showing
+        self.scene_widgets = []                          # the buttons currently on the tile
+
+        # Only shown when the scenes don't all fit on one page
+        self.scenes_page_button = ctk.CTkButton(
+            self, text="", width=40, height=18, corner_radius=0, font=mono(9, True),
+            text_color=self.fg, fg_color=blend(self.bg, self.fg, 0.2),
+            hover_color=blend(self.bg, self.fg, 0.35), command=self.scenes_next_page)
+
+        self._scenes_draw_page()
+
+    def scenes_next_page(self):
+        self.scenes_page_index += 1
+        self._scenes_draw_page()
+
+    def _scenes_draw_page(self):
+        """Remove the old buttons and draw the ones for the current page."""
+        for old_widget in self.scene_widgets:
+            old_widget.destroy()
+        self.scene_widgets = []
+
+        scenes_per_page = self.scenes_columns * self.scenes_rows
+        page_count = max(1, math.ceil(len(self.scene_list) / scenes_per_page))
+        self.scenes_page_index %= page_count             # wrap back to the first page after the last
+        first_scene = self.scenes_page_index * scenes_per_page
+        visible_scenes = self.scene_list[first_scene:first_scene + scenes_per_page]
+
+        if page_count > 1:
+            self.scenes_page_button.configure(text=f"{self.scenes_page_index + 1}/{page_count}")
+            self.scenes_page_button.place(relx=1.0, x=-self.TEXT_PAD_X, y=self.TEXT_PAD_Y, anchor="ne")
+        else:
+            self.scenes_page_button.place_forget()
+
+        if not visible_scenes:
+            empty_label = ctk.CTkLabel(self, text="No scenes in scenes.json", font=mono(10),
+                                       text_color=blend(self.fg, self.bg, 0.35))
+            empty_label.place(relx=0.5, rely=0.55, anchor="center")
+            self.scene_widgets.append(empty_label)
+            return
+
+        if self.scenes_columns == 2:
+            column_positions, button_width = (0.27, 0.73), 0.44     
+        else:
+            column_positions, button_width = (0.5,), 0.88          
+
+        for position, scene in enumerate(visible_scenes):
+            column = position % self.scenes_columns
+            row = position // self.scenes_columns
+            color = get_scene_color(scene)
+            button = ctk.CTkButton(
+                self, text=scene["name"], height=self.scenes_button_height, corner_radius=0,
+                font=mono(10 if self.size == "1x1" else 11, True),
+                text_color=blend(color, "#ffffff", 0.85), fg_color=color,
+                hover_color=blend(color, "#ffffff", 0.18),
+                command=lambda chosen_scene=scene: self._run_scene(chosen_scene))
+            button.place(relx=column_positions[column],
+                         y=46 + row * (self.scenes_button_height + 8),   
+                         relwidth=button_width, anchor="n")
+            self.scene_widgets.append(button)
+
+    def _run_scene(self, scene):
+        """Ask the main window (App) to run the scene."""
+        app = self.winfo_toplevel()
+        if hasattr(app, "run_scene"):
+            app.run_scene(scene)

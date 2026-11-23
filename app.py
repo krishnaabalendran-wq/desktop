@@ -9,6 +9,10 @@ from gradient_border_button import GradientBorderButton
 from grid_manager import GridManager
 from utils import blend
 from style import BG, SURFACE, SURFACE_ALT, BORDER, BORDER_HOVER, TEXT, DIM, BTN, BTN_HOVER, mono
+from actions import SceneContext
+from scene_runner import SceneRunner
+from automation_overlay import AutomationOverlay
+from layouts import load_presets, save_preset, delete_preset, find_preset
 
 DEFAULT_SIZE = "1x1"
 DEFAULT_THEME = ("#171717", "#9a9a9a")   # Graphite
@@ -246,6 +250,11 @@ class App(ctk.CTk):
 
         self.create_widget_menus()
         self.grid_manager.drag.on_edit_request = self.toggle_edit_mode   # holding a tile turns on edit mode
+        
+        self.automation_overlay = AutomationOverlay(self)
+        self.automation_overlay.covered = [self.topbar_frame, self.grid_manager]
+        self.scene_runner = SceneRunner(context=SceneContext(go_to_page=self._scene_go_to_page, copy_to_clipboard=self._scene_copy_text), schedule=self.after, cancel_schedule=self.after_cancel, on_change=self.automation_overlay.refresh, on_finished=self.on_scene_finished, apply_layout=self.apply_layout_preset)
+        
         self.bind("<Configure>", self.on_window_configure)
         
         # Load saved widgets and settings silently in the background
@@ -266,16 +275,7 @@ class App(ctk.CTk):
     def save_layout_and_settings(self):
         layout = []
         if hasattr(self, 'grid_manager'):
-            for w, item in self.grid_manager.tiles.items():
-                layout.append({
-                    "type": w.widget_type,
-                    "size": w.size,
-                    "bg": w.bg,
-                    "fg": w.fg,
-                    "page": item["page_idx"],
-                    "r": item["row"],
-                    "c": item["col"]
-                })
+            layout = self.grid_manager.snapshot()
             with open("layout.json", "w") as f:
                 json.dump(layout, f)
                 
@@ -303,12 +303,7 @@ class App(ctk.CTk):
         try:
             with open("layout.json", "r") as f:
                 layout = json.load(f)
-            for item in layout:
-                self.grid_manager.current_page_idx = item.get("page", 0)
-                self.grid_manager.add_widget(
-                    item["type"], item["size"], item["bg"], item["fg"], 
-                    at=(item["r"], item["c"])
-                )
+            self.grid_manager.apply_snapshot(layout)
             self.grid_manager.switch_page(0, animate=False)
         except Exception as e:
             print("Layout load error:", e)
@@ -345,7 +340,7 @@ class App(ctk.CTk):
                                                 scrollbar_button_hover_color=BORDER_HOVER)
         self.menu_scroll.pack(padx=10, pady=10, fill="both", expand=True)
 
-        widgets_to_add = ["Timer", "Volume", "Weather", "Notify", "System", "Date"]
+        widgets_to_add = ["Timer", "Volume", "Weather", "Notify", "System", "Date", "Scenes"]
         sizes = ["1x1", "2x1", "2x2"]
 
         for w_type in widgets_to_add:
@@ -398,6 +393,20 @@ class App(ctk.CTk):
         )
         self.mode_switch.set("Dark")
         self.mode_switch.pack(fill="x")
+
+        ctk.CTkLabel(settings_body, text="LAYOUT PRESETS", font=mono(11, True), text_color=DIM).pack(anchor="w", pady=(20, 5))
+        save_row = ctk.CTkFrame(settings_body, fg_color="transparent")
+        save_row.pack(fill="x")
+        self.preset_name_entry = ctk.CTkEntry(save_row, placeholder_text="Name", height=30, corner_radius=0, border_width=1, border_color=BORDER, font=mono(11), fg_color=BG, text_color=TEXT)
+        self.preset_name_entry.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(save_row, text="SAVE", width=60, height=30, corner_radius=0, border_width=1,
+                      border_color=BORDER, font=mono(11, True), text_color=TEXT, fg_color=BTN, hover_color=BTN_HOVER,
+                      command=self.save_current_as_preset).pack(side="left", padx=(6, 0))
+        self.preset_status = ctk.CTkLabel(settings_body, text="", font=mono(10), text_color=DIM, anchor="w", justify="left", wraplength=210)
+        self.preset_status.pack(anchor="w", pady=(4, 4))
+        self.preset_list = ctk.CTkScrollableFrame(settings_body, fg_color="transparent", corner_radius=0)
+        self.preset_list.pack(fill="both", expand=True)
+        self.refresh_preset_list()
 
     def change_appearance_mode(self, new_mode: str):
         """Switches the CustomTkinter theme between Light and Dark."""
@@ -509,6 +518,7 @@ class App(ctk.CTk):
             self.color_menu_is_open = True
 
     def hide_menus(self):
+        print("hide menu called")
         self.popout_menu.place_forget()
         self.size_menu.place_forget()
         self.color_menu.place_forget()
@@ -522,3 +532,80 @@ class App(ctk.CTk):
         if self.pending_widget_type and self.pending_size:
             self.grid_manager.add_widget(self.pending_widget_type, self.pending_size, bg_color, font_color)
         self.hide_menus()
+
+    def save_current_as_preset(self):
+        name = self.preset_name_entry.get().strip()
+        if not name:
+            self.preset_status.configure(text="Type a name first.")
+            return
+        widgets = self.grid_manager.snapshot()
+        try:
+            replaced = save_preset(name, widgets)
+        except OSError as error:
+            self.preset_status.configure(text=f"Could not save: {error}")
+            return
+        self.preset_name_entry.delete(0, "end")
+        self.preset_status.configure(text=f"{'Updated' if replaced else 'Saved'} '{name}' ({len(widgets)} widgets)")
+        self.refresh_preset_list()
+
+    def refresh_preset_list(self):
+        for child in self.preset_list.winfo_children():
+            child.destroy()
+        presets = load_presets()
+        if not presets:
+            ctk.CTkLabel(self.preset_list, text="No presets yet", font=mono(10), text_color=DIM).pack(anchor="w")
+        for preset in presets:
+            row = ctk.CTkFrame(self.preset_list, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            ctk.CTkButton(row, text="\u2715", width=26, height=26, corner_radius=0, border_width=1,
+                          border_color=BORDER, text_color=TEXT, fg_color=BTN, hover_color=BTN_HOVER,
+                          command=lambda pid=preset["id"]: self.delete_layout_preset(pid)).pack(side="right")
+            ctk.CTkButton(row, text="APPLY", width=52, height=26, corner_radius=0, border_width=1,
+                          border_color=BORDER, font=mono(10, True), text_color=TEXT, fg_color=BTN,
+                          hover_color=BTN_HOVER,
+                          command=lambda pid=preset["id"]: self.apply_layout_preset(pid)).pack(side="right", padx=(0, 4))
+            ctk.CTkLabel(row, text=preset["name"], font=mono(11), text_color=TEXT,
+                         anchor="w").pack(side="left", fill="x", expand=True)
+
+    def delete_layout_preset(self, preset_id):
+        try:
+            delete_preset(preset_id)
+        except OSError as error:
+            self.preset_status.configure(text=f"Could not delete: {error}")
+        self.refresh_preset_list()
+
+    def apply_layout_preset(self, reference):
+        """Replace the whole layout with a saved preset (by id or name)."""
+        preset = find_preset(load_presets(), reference)
+        if preset is None:
+            raise LookupError(f"no layout named '{reference}'")
+        if self.grid_manager.drag.editing:
+            self.toggle_edit_mode()
+        self.hide_menus()
+        return self.grid_manager.apply_snapshot(preset["widgets"])
+
+
+    def run_scene(self, scene):
+        """Run a scene."""
+        if self.scene_runner.is_running:
+            return                                   # one scene at a time
+        self.hide_menus()                            # close any open menus first
+        self.grid_manager.drag.cancel()              # drop any drag in progress
+        self.automation_overlay.show(self.scene_runner)
+        self.scene_runner.start(scene)
+
+    def on_scene_finished(self, summary):
+        """Called when a scene ends, whether it finished or was stopped."""
+        self.last_scene_summary = summary
+        self.automation_overlay.lift()
+        #if summary["outcome"] == "completed":
+            #self.after(4000, self.automation_overlay.hide)
+
+    def _scene_go_to_page(self, page_index):
+        """Used by the 'Go to page' step. Same as tapping that page's dot."""
+        self.on_dot_clicked(page_index)
+
+    def _scene_copy_text(self, text):
+        """Used by the 'Copy text' step."""
+        self.clipboard_clear()
+        self.clipboard_append(text)
