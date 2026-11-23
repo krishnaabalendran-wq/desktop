@@ -17,6 +17,7 @@ from layouts import load_presets, save_preset, delete_preset, find_preset
 DEFAULT_SIZE = "1x1"
 DEFAULT_THEME = ("#171717", "#9a9a9a")   # Graphite
 
+
 class BrandLogo(ctk.CTkFrame):
     """Recreates the CSS rotated square with gradient inner square."""
     def __init__(self, master):
@@ -201,7 +202,7 @@ class App(ctk.CTk):
             height=32,
             fg_color=SURFACE,
             hover_color=BTN_HOVER,
-            corner_radius=0,
+            corner_radius=12,
             border_width=1,
             font=mono(11, True),
             text_color=TEXT,
@@ -216,7 +217,7 @@ class App(ctk.CTk):
             height=32,
             fg_color=SURFACE,
             hover_color=BTN_HOVER,
-            corner_radius=0,
+            corner_radius=12,
             border_width=1,
             font=mono(11, True),
             text_color=TEXT,
@@ -224,18 +225,20 @@ class App(ctk.CTk):
         )
         self.settings_button.pack(side="right", padx=(0, 10))
 
+        # Only packed while jiggly edit mode is active
         self.edit_button = GradientBorderButton(
             self.right_buttons,
-            text="EDIT",
+            text="DONE",
             width=110,
             height=32,
             fg_color=SURFACE,
             hover_color=BTN_HOVER,
-            corner_radius=0,
+            corner_radius=12,
             border_width=1,
             font=mono(11, True),
             text_color=TEXT,
-            command=self.toggle_edit_mode)
+            command=self.toggle_edit_mode
+        )
 
         # 4. GRID MANAGER (Body)
         self.grid_manager = GridManager(master=self, fg_color="transparent")
@@ -340,7 +343,7 @@ class App(ctk.CTk):
                                                 scrollbar_button_hover_color=BORDER_HOVER)
         self.menu_scroll.pack(padx=10, pady=10, fill="both", expand=True)
 
-        widgets_to_add = ["Timer", "Volume", "Weather", "Notify", "System", "Date", "Scenes"]
+        widgets_to_add = ["Timer", "Volume", "Weather", "Notify", "System", "Date", "Scenes", "voiceassistant"]
         sizes = ["1x1", "2x1", "2x2"]
 
         for w_type in widgets_to_add:
@@ -397,12 +400,20 @@ class App(ctk.CTk):
         ctk.CTkLabel(settings_body, text="LAYOUT PRESETS", font=mono(11, True), text_color=DIM).pack(anchor="w", pady=(20, 5))
         save_row = ctk.CTkFrame(settings_body, fg_color="transparent")
         save_row.pack(fill="x")
-        self.preset_name_entry = ctk.CTkEntry(save_row, placeholder_text="Name", height=30, corner_radius=0, border_width=1, border_color=BORDER, font=mono(11), fg_color=BG, text_color=TEXT)
+        self.preset_name_entry = ctk.CTkEntry(
+            save_row, placeholder_text="Name", height=30, corner_radius=0,
+            border_width=1, border_color=BORDER, font=mono(11), fg_color=BG, text_color=TEXT
+        )
         self.preset_name_entry.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(save_row, text="SAVE", width=60, height=30, corner_radius=0, border_width=1,
-                      border_color=BORDER, font=mono(11, True), text_color=TEXT, fg_color=BTN, hover_color=BTN_HOVER,
-                      command=self.save_current_as_preset).pack(side="left", padx=(6, 0))
-        self.preset_status = ctk.CTkLabel(settings_body, text="", font=mono(10), text_color=DIM, anchor="w", justify="left", wraplength=210)
+        ctk.CTkButton(
+            save_row, text="SAVE", width=60, height=30, corner_radius=0, border_width=1,
+            border_color=BORDER, font=mono(11, True), text_color=TEXT, fg_color=BTN, hover_color=BTN_HOVER,
+            command=self.save_current_as_preset
+        ).pack(side="left", padx=(6, 0))
+        self.preset_status = ctk.CTkLabel(
+            settings_body, text="", font=mono(10), text_color=DIM,
+            anchor="w", justify="left", wraplength=210
+        )
         self.preset_status.pack(anchor="w", pady=(4, 4))
         self.preset_list = ctk.CTkScrollableFrame(settings_body, fg_color="transparent", corner_radius=0)
         self.preset_list.pack(fill="both", expand=True)
@@ -434,7 +445,6 @@ class App(ctk.CTk):
     def toggle_edit_mode(self):
         editing = not self.grid_manager.drag.editing
         self.grid_manager.drag.set_editing(editing)
-        self.edit_button.configure(text="DONE" if editing else "EDIT")
         if editing:
             self.edit_button.configure(text="DONE")
             self.edit_button.pack(side="right", padx=(0, 10))
@@ -556,13 +566,17 @@ class App(ctk.CTk):
         for preset in presets:
             row = ctk.CTkFrame(self.preset_list, fg_color="transparent")
             row.pack(fill="x", pady=2)
-            ctk.CTkButton(row, text="\u2715", width=26, height=26, corner_radius=0, border_width=1,
-                          border_color=BORDER, text_color=TEXT, fg_color=BTN, hover_color=BTN_HOVER,
-                          command=lambda pid=preset["id"]: self.delete_layout_preset(pid)).pack(side="right")
-            ctk.CTkButton(row, text="APPLY", width=52, height=26, corner_radius=0, border_width=1,
-                          border_color=BORDER, font=mono(10, True), text_color=TEXT, fg_color=BTN,
-                          hover_color=BTN_HOVER,
-                          command=lambda pid=preset["id"]: self.apply_layout_preset(pid)).pack(side="right", padx=(0, 4))
+            ctk.CTkButton(
+                row, text="\u2715", width=26, height=26, corner_radius=0, border_width=1,
+                border_color=BORDER, text_color=TEXT, fg_color=BTN, hover_color=BTN_HOVER,
+                command=lambda pid=preset["id"]: self.delete_layout_preset(pid)
+            ).pack(side="right")
+            ctk.CTkButton(
+                row, text="APPLY", width=52, height=26, corner_radius=0, border_width=1,
+                border_color=BORDER, font=mono(10, True), text_color=TEXT, fg_color=BTN,
+                hover_color=BTN_HOVER,
+                command=lambda pid=preset["id"]: self.apply_layout_preset(pid)
+            ).pack(side="right", padx=(0, 4))
             ctk.CTkLabel(row, text=preset["name"], font=mono(11), text_color=TEXT,
                          anchor="w").pack(side="left", fill="x", expand=True)
 
@@ -583,7 +597,6 @@ class App(ctk.CTk):
         self.hide_menus()
         return self.grid_manager.apply_snapshot(preset["widgets"])
 
-
     def run_scene(self, scene):
         """Run a scene."""
         if self.scene_runner.is_running:
@@ -597,8 +610,6 @@ class App(ctk.CTk):
         """Called when a scene ends, whether it finished or was stopped."""
         self.last_scene_summary = summary
         self.automation_overlay.lift()
-        #if summary["outcome"] == "completed":
-            #self.after(4000, self.automation_overlay.hide)
 
     def _scene_go_to_page(self, page_index):
         """Used by the 'Go to page' step. Same as tapping that page's dot."""
