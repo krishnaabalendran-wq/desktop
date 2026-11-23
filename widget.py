@@ -14,16 +14,40 @@ import tkinter as tk
 from datetime import datetime
 from urllib.parse import quote_plus
 
+
+def install_pyaudio_mac():
+    brew_path = shutil.which("brew")
+    if brew_path is None:
+        for path in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew"):
+            if os.path.exists(path):
+                brew_path = path
+                break
+
+    if brew_path is None:
+        print("Homebrew is not installed, skipping PyAudio.")
+        return
+
+    subprocess.check_call([brew_path, "install", "portaudio"])
+    brew_prefix = subprocess.check_output([brew_path, "--prefix"]).decode().strip()
+
+    env = os.environ.copy()
+    env["CPATH"] = f"{brew_prefix}/include"
+    env["LIBRARY_PATH"] = f"{brew_prefix}/lib"
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "PyAudio"], env=env)
+
+
 def ensure_packages():
     packages = [
         ("customtkinter", "customtkinter"),
-        ("pyttsx3", "pyttsx3"),
         ("requests", "requests"),
         ("speech_recognition", "SpeechRecognition"),
-        ("pyaudio", "PyAudio"),
         ("PIL", "Pillow"),
         ("psutil", "psutil"),
+        ("pyaudio", "PyAudio"),
     ]
+
+    if platform.system() != "Darwin":
+        packages.append(("pyttsx3", "pyttsx3"))
 
     for import_name, pip_name in packages:
         if importlib.util.find_spec(import_name) is not None:
@@ -33,20 +57,32 @@ def ensure_packages():
         try:
             subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
         except subprocess.CalledProcessError:
-            if pip_name == "PyAudio" and platform.system() == "Darwin" and shutil.which("brew"):
-                subprocess.check_call(["brew", "install", "portaudio"])
-                subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
+            if pip_name == "PyAudio" and platform.system() == "Darwin":
+                try:
+                    install_pyaudio_mac()
+                except Exception as e:
+                    print(f"Could not install PyAudio: {e}")
             else:
-                raise
+                print(f"Could not install {pip_name}, skipping...")
 
 
 ensure_packages()
 
 import customtkinter as ctk
-import pyttsx3
 import requests
-import speech_recognition as sr
 from PIL import Image, ImageTk, ImageDraw
+
+try:
+    import pyttsx3
+except ImportError:
+    pyttsx3 = None
+
+try:
+    import speech_recognition as sr
+except ImportError:
+    sr = None
+from PIL import Image, ImageTk, ImageDraw
+
 try:
     import psutil
 except ImportError:
@@ -887,6 +923,9 @@ class Widget(ctk.CTkFrame):
             pass
 
     def voiceassistant_toggle(self):
+        if sr is None or importlib.util.find_spec("pyaudio") is None:
+            self._anubis_ui_update(state="NO MIC", reply="Install portaudio + PyAudio first.")
+            return
         if self._voiceassistant_running:
             self._voiceassistant_running = False
             self._voiceassistant_ui_update(state="IDLE", reply="Stopped.", running=False)
