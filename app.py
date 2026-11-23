@@ -13,6 +13,7 @@ from style import BG, SURFACE, SURFACE_ALT, BORDER, BORDER_HOVER, TEXT, DIM, BTN
 DEFAULT_SIZE = "1x1"
 DEFAULT_THEME = ("#171717", "#9a9a9a")   # Graphite
 
+
 class BrandLogo(ctk.CTkFrame):
     """Recreates the CSS rotated square with gradient inner square."""
     def __init__(self, master):
@@ -197,7 +198,7 @@ class App(ctk.CTk):
             height=32,
             fg_color=SURFACE,
             hover_color=BTN_HOVER,
-            corner_radius=0,
+            corner_radius=12,
             border_width=1,
             font=mono(11, True),
             text_color=TEXT,
@@ -212,7 +213,7 @@ class App(ctk.CTk):
             height=32,
             fg_color=SURFACE,
             hover_color=BTN_HOVER,
-            corner_radius=0,
+            corner_radius=12,
             border_width=1,
             font=mono(11, True),
             text_color=TEXT,
@@ -220,18 +221,20 @@ class App(ctk.CTk):
         )
         self.settings_button.pack(side="right", padx=(0, 10))
 
+        # Only packed while jiggly edit mode is active
         self.edit_button = GradientBorderButton(
             self.right_buttons,
-            text="EDIT",
+            text="DONE",
             width=110,
             height=32,
             fg_color=SURFACE,
             hover_color=BTN_HOVER,
-            corner_radius=0,
+            corner_radius=12,
             border_width=1,
             font=mono(11, True),
             text_color=TEXT,
-            command=self.toggle_edit_mode)
+            command=self.toggle_edit_mode
+        )
 
         # 4. GRID MANAGER (Body)
         self.grid_manager = GridManager(master=self, fg_color="transparent")
@@ -345,7 +348,7 @@ class App(ctk.CTk):
                                                 scrollbar_button_hover_color=BORDER_HOVER)
         self.menu_scroll.pack(padx=10, pady=10, fill="both", expand=True)
 
-        widgets_to_add = ["Timer", "Volume", "Weather", "Notify", "System", "Date"]
+        widgets_to_add = ["Timer", "Volume", "Weather", "Notify", "System", "Date", "voiceassistant"]
         sizes = ["1x1", "2x1", "2x2"]
 
         for w_type in widgets_to_add:
@@ -425,7 +428,6 @@ class App(ctk.CTk):
     def toggle_edit_mode(self):
         editing = not self.grid_manager.drag.editing
         self.grid_manager.drag.set_editing(editing)
-        self.edit_button.configure(text="DONE" if editing else "EDIT")
         if editing:
             self.edit_button.configure(text="DONE")
             self.edit_button.pack(side="right", padx=(0, 10))
