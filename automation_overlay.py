@@ -60,8 +60,14 @@ class AutomationOverlay(ctk.CTkFrame):
         self.status_label = ctk.CTkLabel(self.panel, text="", anchor="w", font=mono(13, True), text_color=DIM, fg_color=SURFACE)
         self.status_label.pack(anchor="w", padx=24, pady=(4, 12))
 
-        self.rows_frame = ctk.CTkFrame(self.panel, corner_radius=0, fg_color=SURFACE)
-        self.rows_frame.pack(fill="x", padx=24)
+        self.rows_frame = ctk.CTkScrollableFrame(
+            self.panel,
+            corner_radius=0,
+            fg_color=SURFACE,
+            scrollbar_button_color=BORDER,
+            scrollbar_button_hover_color=BORDER_HOVER,
+        )
+        self.rows_frame.pack(fill="both", expand=True, padx=24, pady=(0, 110))
 
         self.note_label = ctk.CTkLabel(self.panel, text="", font=mono(11), text_color=DIM, fg_color=SURFACE)
         self.note_label.place(relx=0.5, rely=1.0, y=-84, anchor="s")
