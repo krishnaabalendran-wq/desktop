@@ -1,269 +1,298 @@
 {
   "scenes": [
     {
-      "id": "start-of-day",
-      "name": "Start of day",
+      "id": "morning-briefing",
+      "name": "Morning briefing",
       "color": "#17492b",
       "triggers": [
         {
           "type": "time",
-          "at": "09:00",
-          "days": [
-            "Mon",
-            "Tue",
-            "Wed",
-            "Thu",
-            "Fri"
-          ]
+          "at": "08:30",
+          "days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+          "reason": "Start-of-day briefing"
         }
       ],
       "steps": [
-        {
-          "type": "open_link",
-          "url": "https://calendar.google.com"
-        },
-        {
-          "type": "open_link",
-          "url": "https://mail.google.com"
-        },
-        {
-          "type": "set_volume",
-          "percent": 30
-        },
-        {
-          "type": "go_to_page",
-          "page": 1
-        },
-        {
-          "type": "message",
-          "text": "Ready for the day"
-        }
+        { "type": "open_link", "url": "https://calendar.google.com" },
+        { "type": "open_link", "url": "https://mail.google.com" },
+        { "type": "open_app", "mac": "Slack", "windows": "Slack", "app": "slack" },
+        { "type": "set_volume", "percent": 25 },
+        { "type": "message", "text": "Morning briefing ready" }
       ]
     },
     {
-      "id": "meeting",
-      "name": "Meeting",
-      "color": "#1e4d5c",
+      "id": "standup-prep",
+      "name": "Standup prep",
+      "color": "#2d5a4e",
+      "triggers": [
+        {
+          "type": "time",
+          "at": "09:10",
+          "days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+          "reason": "Standup is coming up"
+        }
+      ],
       "steps": [
-        {
-          "type": "set_volume",
-          "percent": 50
-        },
-        {
-          "type": "go_to_page",
-          "page": 1
-        },
-        {
-          "type": "open_link",
-          "url": "https://calendar.google.com"
-        },
-        {
-          "type": "message",
-          "text": "Meeting mode: open the invite and join"
-        }
+        { "type": "open_link", "url": "https://calendar.google.com" },
+        { "type": "open_link", "url": "https://github.com" },
+        { "type": "open_app", "mac": "Slack", "windows": "Slack", "app": "slack" },
+        { "type": "set_volume", "percent": 45 },
+        { "type": "message", "text": "Standup prep ready" }
       ]
     },
     {
-      "id": "deep-work",
-      "name": "Deep work",
+      "id": "coding-mode",
+      "name": "Coding mode",
+      "color": "#2f4a5a",
+      "triggers": [
+        {
+          "type": "app_focused",
+          "mac": "Terminal",
+          "windows": "WindowsTerminal",
+          "app": "terminal",
+          "seconds": 10,
+          "reason": "Terminal is open"
+        }
+      ],
+      "steps": [
+        { "type": "open_app", "mac": "Visual Studio Code", "windows": "Code", "app": "code" },
+        { "type": "open_link", "url": "https://github.com" },
+        { "type": "set_volume", "percent": 20 },
+        { "type": "message", "text": "Development environment ready" }
+      ]
+    },
+    {
+      "id": "focus-mode",
+      "name": "Focus mode",
       "color": "#5a4410",
       "triggers": [
         {
           "type": "app_focused",
-          "app": "Calculator",
-          "seconds": 5
+          "mac": "Visual Studio Code",
+          "windows": "Code",
+          "app": "code",
+          "seconds": 15,
+          "reason": "You look like you're starting focused work"
         }
       ],
       "steps": [
-        {
-          "type": "set_volume",
-          "percent": 15
-        },
-        {
-          "type": "go_to_page",
-          "page": 3
-        },
-        {
-          "type": "copy_text",
-          "text": "Heads down on focused work. I'll reply within the hour."
-        },
-        {
-          "type": "message",
-          "text": "Focus time. Status copied: paste it into chat"
-        }
+        { "type": "set_volume", "percent": 10 },
+        { "type": "open_app", "mac": "Spotify", "windows": "Spotify", "app": "spotify" },
+        { "type": "wait", "seconds": 3 },
+        { "type": "message", "text": "Focus mode on" }
       ]
     },
     {
-      "id": "leaving",
-      "name": "Leaving",
-      "color": "#4a2a5a",
+      "id": "documentation-mode",
+      "name": "Documentation mode",
+      "color": "#3d5a4e",
       "triggers": [
         {
-          "type": "time",
-          "at": "17:00",
-          "days": [
-            "Mon",
-            "Tue",
-            "Wed",
-            "Thu",
-            "Fri"
-          ]
+          "type": "app_focused",
+          "mac": "Obsidian",
+          "windows": "Obsidian",
+          "app": "obsidian",
+          "seconds": 10,
+          "reason": "Notes app is open"
         }
       ],
       "steps": [
-        {
-          "type": "set_volume",
-          "percent": 0
-        },
-        {
-          "type": "go_to_page",
-          "page": 1
-        },
-        {
-          "type": "copy_text",
-          "text": "I've signed off for the day and will reply first thing tomorrow."
-        },
-        {
-          "type": "message",
-          "text": "See you tomorrow. Sign-off message copied"
-        }
+        { "type": "open_app", "mac": "Google Chrome", "windows": "chrome", "app": "chrome" },
+        { "type": "open_link", "url": "https://github.com" },
+        { "type": "set_volume", "percent": 15 },
+        { "type": "message", "text": "Documentation workspace ready" }
       ]
     },
     {
-      "id": "presentation",
-      "name": "Presentation",
+      "id": "call-mode",
+      "name": "Call Mode",
+      "color": "#1b3a6b",
+      "triggers": [
+        {
+          "type": "app_focused",
+          "mac": "Zoom",
+          "windows": "Zoom",
+          "app": "zoom",
+          "seconds": 10,
+          "reason": "Zoom is open"
+        }
+      ],
+      "steps": [
+        { "type": "set_volume", "percent": 50 },
+        { "type": "open_link", "url": "https://calendar.google.com" },
+        { "type": "message", "text": "Call mode ready" }
+      ]
+    },
+    {
+      "id": "presentation-mode",
+      "name": "Presentation mode",
       "color": "#1b3a6b",
       "triggers": [
         {
           "type": "app_focused",
           "mac": "Keynote",
           "windows": "POWERPNT.EXE",
-          "seconds": 5
+          "app": "powerpoint",
+          "seconds": 10,
+          "reason": "Presentation app is open"
         }
       ],
       "steps": [
-        {
-          "type": "set_volume",
-          "percent": 40
-        },
-        {
-          "type": "go_to_page",
-          "page": 2
-        },
-        {
-          "type": "message",
-          "text": "Presenting: check your mic, close chat apps"
-        }
+        { "type": "set_volume", "percent": 40 },
+        { "type": "open_app", "mac": "Google Chrome", "windows": "chrome", "app": "chrome" },
+        { "type": "wait", "seconds": 2 },
+        { "type": "message", "text": "Presentation mode ready" }
       ]
     },
     {
-      "id": "standup",
-      "name": "Standup notes",
-      "color": "#2d5a4e",
-      "steps": [
-        {
-          "type": "go_to_page",
-          "page": 1
-        },
-        {
-          "type": "copy_text",
-          "text": "Yesterday:\n- \n\nToday:\n- \n\nBlockers:\n- "
-        },
-        {
-          "type": "message",
-          "text": "Standup template copied: paste it"
-        }
-      ]
-    },
-    {
-      "id": "running-late",
-      "name": "Running late",
-      "color": "#7a3b1d",
-      "steps": [
-        {
-          "type": "copy_text",
-          "text": "Running a few minutes late. Please start without me, I'll join shortly."
-        },
-        {
-          "type": "message",
-          "text": "Message copied: paste it into chat"
-        }
-      ]
-    },
-    {
-      "id": "back-in-10",
-      "name": "Back in 10",
-      "color": "#3b4a6b",
+      "id": "writing-sprint",
+      "name": "Writing sprint",
+      "color": "#4a4a2b",
       "triggers": [
         {
-          "type": "idle",
-          "minutes": 0.6
+          "type": "app_focused",
+          "mac": "Obsidian",
+          "windows": "Obsidian",
+          "app": "obsidian",
+          "seconds": 20,
+          "reason": "Writing time"
         }
       ],
       "steps": [
-        {
-          "type": "copy_text",
-          "text": "Stepping away for 10 minutes. Back shortly."
-        },
-        {
-          "type": "message",
-          "text": "Away message copied: paste it into chat"
-        }
+        { "type": "set_volume", "percent": 10 },
+        { "type": "open_app", "mac": "Spotify", "windows": "Spotify", "app": "spotify" },
+        { "type": "wait", "seconds": 3 },
+        { "type": "message", "text": "Writing sprint started" }
       ]
     },
     {
-      "id": "lunch",
-      "name": "Lunch break",
+      "id": "learning-block",
+      "name": "Learning block",
+      "color": "#3d3d5c",
+      "triggers": [
+        {
+          "type": "time",
+          "at": "14:00",
+          "days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+          "reason": "Learning block"
+        }
+      ],
+      "steps": [
+        { "type": "open_link", "url": "https://www.youtube.com" },
+        { "type": "open_link", "url": "https://gemini.google.com" },
+        { "type": "set_volume", "percent": 25 },
+        { "type": "message", "text": "Learning block ready" }
+      ]
+    },
+    {
+      "id": "lunch-reminder",
+      "name": "Lunch reminder",
       "color": "#5a2f3f",
       "triggers": [
         {
           "type": "time",
-          "at": "12:00",
-          "days": [
-            "Mon",
-            "Tue",
-            "Wed",
-            "Thu",
-            "Fri"
-          ]
+          "at": "11:50",
+          "days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+          "reason": "Lunch is coming up"
         }
       ],
       "steps": [
-        {
-          "type": "set_volume",
-          "percent": 0
-        },
-        {
-          "type": "go_to_page",
-          "page": 1
-        },
-        {
-          "type": "copy_text",
-          "text": "Out for lunch. Back in 45 minutes."
-        },
-        {
-          "type": "message",
-          "text": "Enjoy lunch. Away message copied"
-        }
+        { "type": "set_volume", "percent": 0 },
+        { "type": "open_link", "url": "https://www.google.com/maps" },
+        { "type": "message", "text": "Lunch break" }
       ]
     },
     {
-      "id": "weekly-update",
-      "name": "Weekly update",
-      "color": "#3d3d5c",
-      "steps": [
+      "id": "long-break",
+      "name": "Long break",
+      "color": "#3b4a6b",
+      "triggers": [
         {
-          "type": "go_to_page",
-          "page": 1
-        },
-        {
-          "type": "copy_text",
-          "text": "Weekly update\n\nDone this week:\n- \n\nNext week:\n- \n\nBlockers:\n- "
-        },
-        {
-          "type": "message",
-          "text": "Weekly update template copied: paste it"
+          "type": "idle",
+          "minutes": 50,
+          "reason": "You've been working for a while"
         }
+      ],
+      "steps": [
+        { "type": "set_volume", "percent": 30 },
+        { "type": "open_link", "url": "https://www.youtube.com" },
+        { "type": "message", "text": "Break started" }
+      ]
+    },
+    {
+      "id": "back-to-work",
+      "name": "Back to work",
+      "color": "#4a5a2b",
+      "triggers": [
+        {
+          "type": "idle",
+          "minutes": 10,
+          "reason": "You stepped away"
+        }
+      ],
+      "steps": [
+        { "type": "set_volume", "percent": 20 },
+        { "type": "open_link", "url": "https://calendar.google.com" },
+        { "type": "message", "text": "Back to work" }
+      ]
+    },
+    {
+      "id": "invoice-day",
+      "name": "Invoice day",
+      "color": "#5a4a2b",
+      "triggers": [
+        {
+          "type": "time",
+          "at": "10:00",
+          "days": ["Fri"],
+          "reason": "Weekly admin time"
+        }
+      ],
+      "steps": [
+        { "type": "run_command", "mac": "open ~/Documents/Invoices", "windows": "explorer \"%USERPROFILE%\\Documents\\Invoices\"", "command": "xdg-open ~/Documents/Invoices", "timeout": 10 },
+        { "type": "open_link", "url": "https://www.google.com" },
+        { "type": "set_volume", "percent": 15 },
+        { "type": "message", "text": "Invoice workspace ready" }
+      ]
+    },
+    {
+      "id": "weekly-planning",
+      "name": "Weekly planning",
+      "color": "#3d3d5c",
+      "triggers": [
+        {
+          "type": "time",
+          "at": "15:30",
+          "days": ["Fri"],
+          "reason": "Weekly planning time"
+        }
+      ],
+      "steps": [
+        { "type": "open_link", "url": "https://calendar.google.com" },
+        { "type": "open_link", "url": "https://github.com" },
+        { "type": "open_app", "mac": "Obsidian", "windows": "Obsidian", "app": "obsidian" },
+        { "type": "set_volume", "percent": 20 },
+        { "type": "message", "text": "Weekly planning mode" }
+      ]
+    },
+    {
+      "id": "end-of-day",
+      "name": "End of day",
+      "color": "#4a2a5a",
+      "triggers": [
+        {
+          "type": "time",
+          "at": "16:50",
+          "days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+          "reason": "Time to wrap up"
+        }
+      ],
+      "steps": [
+        { "type": "set_volume", "percent": 0 },
+        { "type": "run_command", "mac": "osascript -e 'tell application \"Slack\" to quit'", "windows": "taskkill /IM Slack.exe /F", "command": "pkill Slack", "timeout": 10 },
+        { "type": "message", "text": "Workday complete" },
+        { "type": "wait", "seconds": 5 },
+        { "type": "run_command", "mac": "pmset sleepnow", "timeout": 5}
       ]
     }
   ]

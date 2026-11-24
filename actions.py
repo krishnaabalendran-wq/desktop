@@ -3,6 +3,10 @@ import subprocess
 import textwrap
 import time
 import webbrowser
+import os
+import shutil
+from datetime import datetime
+from urllib.parse import quote_plus
 
 SYSTEM = platform.system()
 OS_KEYS = {"Darwin": "mac", "Windows": "windows", "Linux": "linux"}
@@ -173,6 +177,238 @@ def _step_apply_layout(step, context):
         return InstantStep(False, f"{skipped} widget(s) could not be placed")
     return InstantStep(True)
 
+def _step_send_notification(step, context):
+    title = str(step.get("title", "Scene")).strip()
+    text = str(step.get("text", "")).strip()
+
+    if not text:
+        return InstantStep(False, "no notification text set")
+
+    try:
+        import requests
+    except ImportError:
+        return InstantStep(False, "requests is not installed")
+
+    try:
+        response = requests.post(
+            "https://ntfy.sh/thomass-deck",
+            data=text.encode("utf-8"),
+            headers={"Title": title},
+            timeout=10,
+        )
+    except requests.RequestException as error:
+        return InstantStep(False, f"notification failed: {error}")
+
+    return InstantStep(response.ok, "" if response.ok else f"HTTP {response.status_code}")
+
+
+def _step_open_path(step, context):
+    path = os.path.expanduser(str(step.get("path", "")).strip())
+
+    if not path:
+        return InstantStep(False, "no path set")
+    if not os.path.exists(path):
+        return InstantStep(False, "path does not exist")
+
+    if SYSTEM == "Darwin":
+        command = ["open", path]
+    elif SYSTEM == "Windows":
+        command = ["explorer", os.path.normpath(path)]
+    else:
+        command = ["xdg-open", path]
+
+    return _start_process(command, False, 10)
+
+
+def _step_open_file(step, context):
+    path = os.path.expanduser(str(step.get("path", "")).strip())
+
+    if not path:
+        return InstantStep(False, "no file set")
+    if not os.path.isfile(path):
+        return InstantStep(False, "file does not exist")
+
+    if SYSTEM == "Darwin":
+        command = ["open", path]
+    elif SYSTEM == "Windows":
+        command = ["cmd", "/c", "start", "", path]
+    else:
+        command = ["xdg-open", path]
+
+    return _start_process(command, False, 10)
+
+
+def _step_create_folder(step, context):
+    name = str(step.get("name", "")).strip()
+    parent = os.path.expanduser(str(step.get("parent", "~/Documents")).strip())
+
+    if not name:
+        return InstantStep(False, "no folder name set")
+
+    name = name.replace("{date}", datetime.now().strftime("%Y-%m-%d"))
+    name = name.replace("{time}", datetime.now().strftime("%H-%M-%S"))
+
+    folder = os.path.join(parent, name)
+
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except OSError as error:
+        return InstantStep(False, str(error))
+
+    if SYSTEM == "Darwin":
+        command = ["open", folder]
+    elif SYSTEM == "Windows":
+        command = ["explorer", os.path.normpath(folder)]
+    else:
+        command = ["xdg-open", folder]
+
+    return _start_process(command, False, 10)
+
+
+def _step_lock_screen(step, context):
+    if SYSTEM == "Darwin":
+        command = ["pmset", "displaysleepnow"]
+    elif SYSTEM == "Windows":
+        command = ["rundll32.exe", "user32.dll,LockWorkStation"]
+    else:
+        command = ["loginctl", "lock-session"]
+
+    return _start_process(command, False, 5)
+
+
+def _step_screenshot(step, context):
+    folder = os.path.expanduser(str(step.get("folder", "~/Pictures/Screenshots")).strip())
+    name = str(step.get("name", "screenshot-{time}")).strip()
+    name = name.replace("{date}", datetime.now().strftime("%Y-%m-%d"))
+    name = name.replace("{time}", datetime.now().strftime("%H-%M-%S"))
+
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except OSError as error:
+        return InstantStep(False, str(error))
+
+    file_path = os.path.join(folder, f"{name}.png")
+
+    if SYSTEM == "Darwin":
+        command = ["screencapture", "-x", file_path]
+    elif SYSTEM == "Windows":
+        return InstantStep(False, "screenshots need a Windows tool such as ShareX or Snipping Tool")
+    else:
+        command = ["gnome-screenshot", "-f", file_path]
+
+    return _start_process(command, False, 10)
+
+
+def _step_press_keys(step, context):
+    keys = str(step.get("keys", "")).strip()
+
+    if not keys:
+        return InstantStep(False, "no keys set")
+
+    try:
+        import pyautogui
+    except ImportError:
+        return InstantStep(False, "pyautogui is not installed")
+
+    try:
+        pyautogui.hotkey(*[key.strip() for key in keys.split("+")])
+    except Exception as error:
+        return InstantStep(False, str(error))
+
+    return InstantStep(True)
+
+
+def _step_type_text(step, context):
+    text = str(step.get("text", ""))
+
+    if not text:
+        return InstantStep(False, "no text set")
+
+    try:
+        import pyautogui
+    except ImportError:
+        return InstantStep(False, "pyautogui is not installed")
+
+    try:
+        pyautogui.write(text, interval=float(step.get("interval", 0.02)))
+    except Exception as error:
+        return InstantStep(False, str(error))
+
+    return InstantStep(True)
+
+
+def _step_web_search(step, context):
+    query = str(step.get("query", "")).strip()
+
+    if not query:
+        return InstantStep(False, "no search query set")
+
+    query = query.replace("{date}", datetime.now().strftime("%Y-%m-%d"))
+    url = f"https://www.google.com/search?q={quote_plus(query)}"
+
+    opened = webbrowser.open(url)
+    return InstantStep(opened, "" if opened else "could not open the browser")
+
+
+def _step_play_audio(step, context):
+    url = (pick_for_this_os(step, "url") or "").strip()
+
+    if not url:
+        return InstantStep(False, "no audio link set")
+
+    if not url.lower().startswith(("http://", "https://")):
+        url = "https://" + url
+
+    opened = webbrowser.open(url)
+    return InstantStep(opened, "" if opened else "could not open the browser")
+
+
+def _step_set_brightness(step, context):
+    try:
+        percent = int(step.get("percent"))
+    except (TypeError, ValueError):
+        return InstantStep(False, "percent must be a number from 0 to 100")
+
+    if not 0 <= percent <= 100:
+        return InstantStep(False, "percent must be a number from 0 to 100")
+
+    if SYSTEM == "Darwin":
+        command = ["brightness", str(percent / 100)]
+    elif SYSTEM == "Windows":
+        return InstantStep(False, "brightness needs a Windows utility such as Monitorian or ControlMyMonitor")
+    else:
+        command = ["brightnessctl", "set", f"{percent}%"]
+
+    return _start_process(command, False, 5)
+
+
+def _step_set_dnd(step, context):
+    enabled = bool(step.get("enabled", True))
+
+    if SYSTEM == "Darwin":
+        return InstantStep(False, "macOS Do Not Disturb needs a supported shortcut or utility")
+    elif SYSTEM == "Windows":
+        return InstantStep(False, "Windows Do Not Disturb needs a supported utility")
+    else:
+        command = ["gsettings", "set", "org.gnome.desktop.notifications", "show-banners", "false" if enabled else "true"]
+        return _start_process(command, False, 5)
+
+
+def _step_close_app(step, context):
+    app_name = pick_for_this_os(step, "app")
+
+    if not app_name:
+        return InstantStep(False, "no app set for this computer")
+
+    if SYSTEM == "Darwin":
+        command = ["osascript", "-e", f'tell application "{app_name}" to quit']
+    elif SYSTEM == "Windows":
+        command = ["taskkill", "/IM", f"{app_name}.exe", "/F"]
+    else:
+        command = ["pkill", app_name]
+
+    return _start_process(command, False, 10)
+
 def _step_wait(step, context):
     try:
         seconds = float(step.get("seconds"))
@@ -192,7 +428,20 @@ STEP_STARTERS = {
     "copy_text": _step_copy_text,
     "wait": _step_wait,
     "message": _step_message,
-    "apply_layout": _step_apply_layout
+    "apply_layout": _step_apply_layout,
+    "send_notification": _step_send_notification,
+    "open_path": _step_open_path,
+    "open_file": _step_open_file,
+    "create_folder": _step_create_folder,
+    "lock_screen": _step_lock_screen,
+    "screenshot": _step_screenshot,
+    "press_keys": _step_press_keys,
+    "type_text": _step_type_text,
+    "web_search": _step_web_search,
+    "play_audio": _step_play_audio,
+    "set_brightness": _step_set_brightness,
+    "set_dnd": _step_set_dnd,
+    "close_app": _step_close_app,
 }
 
 def start_step(step, context):
@@ -223,6 +472,33 @@ def describe_step(step):
         text = str(step.get("text", ""))
     elif kind == "apply_layout":
         text = "Apply layout: " + (str(step.get("layout") or "") or "(nothing set)")
+    elif kind == "send_notification":
+        text = f"Notify: {step.get('title', 'Scene')} — {step.get('text', '')}"
+    elif kind == "open_path":
+        text = "Open path: " + str(step.get("path", ""))
+    elif kind == "open_file":
+        text = "Open file: " + str(step.get("path", ""))
+    elif kind == "create_folder":
+        text = "Create folder: " + str(step.get("name", ""))
+    elif kind == "lock_screen":
+        text = "Lock the computer"
+    elif kind == "screenshot":
+        text = "Take screenshot"
+    elif kind == "press_keys":
+        text = "Press keys: " + str(step.get("keys", ""))
+    elif kind == "type_text":
+        text = "Type text"
+    elif kind == "web_search":
+        text = "Search: " + str(step.get("query", ""))
+    elif kind == "play_audio":
+        text = "Play audio: " + str(step.get("url", ""))
+    elif kind == "set_brightness":
+        text = f"Set brightness to {step.get('percent')}%"
+    elif kind == "set_dnd":
+        state = "on" if step.get("enabled", True) else "off"
+        text = f"Turn Do Not Disturb {state}"
+    elif kind == "close_app":
+        text = "Close app: " + (pick_for_this_os(step, "app") or "(nothing set)")
     else:
         text = f"Unknown step ({kind})"
     return textwrap.shorten(text, width=48, placeholder="...")

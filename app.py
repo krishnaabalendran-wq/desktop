@@ -289,8 +289,6 @@ class App(ctk.CTk):
         self.deiconify()  # Brings the fully loaded main window onto the screen
         # CTkToplevel windows can re-appear shortly after startup even though they were hidden,
         # so make sure settings starts closed (once now, once after customtkinter's own delayed setup).
-        self.close_settings()
-        self.after(300, self.close_settings)
 
     # --- SAVE / LOAD MECHANISM ---
     def save_layout_and_settings(self):
@@ -395,10 +393,6 @@ class App(ctk.CTk):
                                        border_width=1, border_color=BORDER)
         self.color_menu.grid_propagate(False)
 
-        self.settings_panel = ctk.CTkFrame(self, width=260, height=400, corner_radius=0, fg_color=SURFACE,
-                                           border_width=1, border_color=BORDER)
-        self.settings_panel.pack_propagate(False)
-
         self.settings_window = ctk.CTkToplevel(self, fg_color=SURFACE)
         self.settings_window.title("Settings")
         self.settings_window.geometry(f"{SETTINGS_SIZE[0]}x{SETTINGS_SIZE[1]}")
@@ -438,9 +432,6 @@ class App(ctk.CTk):
         ctk.CTkButton(settings_body, text="TODAY'S RECAP", command=self.show_recap, height=28, corner_radius=0,
                       border_width=1, border_color=BORDER, font=mono(11, True), text_color=TEXT,
                       fg_color=BTN, hover_color=BTN_HOVER).pack(fill="x")
-        ctk.CTkButton(settings_body, text="PREVIEW SUGGESTION", command=self.preview_suggestion, height=28, corner_radius=0,
-                      border_width=1, border_color=BORDER, font=mono(11, True), text_color=TEXT,
-                      fg_color=BTN, hover_color=BTN_HOVER).pack(fill="x", pady=(6, 0))
 
         ctk.CTkLabel(settings_body, text="LAYOUT PRESETS", font=mono(11, True), text_color=DIM).pack(anchor="w", pady=(20, 5))
         save_row = ctk.CTkFrame(settings_body, fg_color="transparent")
@@ -753,19 +744,6 @@ class App(ctk.CTk):
     def _suggestion_dismissed(self, suggestion, mute_today):
         """NOT NOW, NOT TODAY, or the suggestion timed out."""
         self.trigger_engine.dismissed(suggestion, mute_today)
-
-    def preview_suggestion(self):
-        """Show the suggestion panel right now for one of your scenes, to check the panel itself works.
-        RUN really runs the scene. NOT NOW / NOT TODAY just close it (nothing is muted)."""
-        scenes = load_scenes()
-        scene = next((s for s in scenes if s.get("triggers")), scenes[0] if scenes else None)
-        if scene is None or self.scene_runner.is_running:
-            return
-        self.close_settings()
-        self.hide_menus()
-        self.grid_manager.drag.cancel()
-        suggestion = {"key": ("preview",), "scene": scene, "reason": "Preview (nothing triggered this)", "trigger_type": "preview"}
-        self.automation_overlay.show_suggestion(suggestion, self._suggestion_run, lambda s, mute_today: None)
 
     def show_recap(self):
         """Show today's recap: scenes run, and time per kind of app."""
