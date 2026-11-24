@@ -13,9 +13,18 @@ from actions import SceneContext
 from scene_runner import SceneRunner
 from automation_overlay import AutomationOverlay
 from layouts import load_presets, save_preset, delete_preset, find_preset
+from scenes import SCENES_FILE, load_scenes
+from actions import OS_KEYS, SYSTEM
+from context import get_frontmost_app, get_idle_seconds
+from triggers import TriggerEngine
+from history import History, day_key, day_recap, recap_lines
 
 DEFAULT_SIZE = "1x1"
 DEFAULT_THEME = ("#171717", "#9a9a9a")   # Graphite
+TRIGGER_CHECK_MS = 2000                  # how often the deck looks at the front app, idle time and the clock 
+DEBUG_TRIGGERS = True                    # prints why suggestions do or don't appear (set False when done)
+ACTIVE_IDLE_LIMIT_SECONDS = 120          # app time only counts if the computer was used in the last 2 minutes
+SETTINGS_SIZE = (300, 560)               # width, height of the Settings window
 
 
 class BrandLogo(ctk.CTkFrame):
@@ -258,6 +267,11 @@ class App(ctk.CTk):
         self.automation_overlay.covered = [self.topbar_frame, self.grid_manager]
         self.scene_runner = SceneRunner(context=SceneContext(go_to_page=self._scene_go_to_page, copy_to_clipboard=self._scene_copy_text, apply_layout=self.apply_layout_preset), schedule=self.after, cancel_schedule=self.after_cancel, on_change=self.automation_overlay.refresh, on_finished=self.on_scene_finished, apply_layout=self.apply_layout_preset)
         
+        self.history = History()
+        self.trigger_engine = TriggerEngine(OS_KEYS.get(SYSTEM, ""))
+        self._scenes_modified_time = -1.0        # so scenes.json is read the first time and again whenever it changes
+        self.after(5000, self.check_triggers)
+
         self.bind("<Configure>", self.on_window_configure)
         
         # Load saved widgets and settings silently in the background
@@ -273,6 +287,10 @@ class App(ctk.CTk):
         self.splash.stop()
         self.splash.destroy()
         self.deiconify()  # Brings the fully loaded main window onto the screen
+        # CTkToplevel windows can re-appear shortly after startup even though they were hidden,
+        # so make sure settings starts closed (once now, once after customtkinter's own delayed setup).
+        self.close_settings()
+        self.after(300, self.close_settings)
 
     # --- SAVE / LOAD MECHANISM ---
     def save_layout_and_settings(self):
@@ -282,7 +300,11 @@ class App(ctk.CTk):
             with open("layout.json", "w") as f:
                 json.dump(layout, f)
                 
-        settings = {"appearance": self.mode_switch.get() if hasattr(self, "mode_switch") else "Dark"}
+        settings = {
+            "appearance": self.mode_switch.get() if hasattr(self, "mode_switch") else "Dark",
+            "suggestions_enabled": bool(self.suggestions_switch.get()) if hasattr(self, "suggestions_switch") else True,
+            "app_awareness": bool(self.app_awareness_switch.get()) if hasattr(self, "app_awareness_switch") else False,
+        }
         with open("settings.json", "w") as f:
             json.dump(settings, f)
 
@@ -295,6 +317,15 @@ class App(ctk.CTk):
                     ctk.set_appearance_mode(mode)
                     if hasattr(self, "mode_switch"):
                         self.mode_switch.set(mode)
+                    if hasattr(self, "suggestions_switch"):
+                        if settings.get("suggestions_enabled", True):
+                            self.suggestions_switch.select()
+                        else:
+                            self.suggestions_switch.deselect()
+                        if settings.get("app_awareness", False):
+                            self.app_awareness_switch.select()
+                        else:
+                            self.app_awareness_switch.deselect()
             else:
                 ctk.set_appearance_mode("Dark")
         except Exception as e:
@@ -313,6 +344,8 @@ class App(ctk.CTk):
 
     def on_closing(self):
         self.save_layout_and_settings()
+        if hasattr(self, "history"):
+            self.history.flush()                     # save any app time not yet written to disk
         self.destroy()
 
     # --- STANDARD LOGIC ---
@@ -368,7 +401,7 @@ class App(ctk.CTk):
 
         self.settings_window = ctk.CTkToplevel(self, fg_color=SURFACE)
         self.settings_window.title("Settings")
-        self.settings_window.geometry("300x460")
+        self.settings_window.geometry(f"{SETTINGS_SIZE[0]}x{SETTINGS_SIZE[1]}")
         self.settings_window.minsize(260, 320)
         self.settings_window.transient(self)
         self.settings_window.withdraw()
@@ -392,6 +425,22 @@ class App(ctk.CTk):
         )
         self.mode_switch.set("Dark")
         self.mode_switch.pack(fill="x")
+
+        # --- SUGGESTIONS ---
+        ctk.CTkLabel(settings_body, text="SUGGESTIONS", font=mono(11, True), text_color=DIM).pack(anchor="w", pady=(20, 5))
+        self.suggestions_switch = ctk.CTkSwitch(settings_body, text="SUGGEST SCENES", font=mono(11, True), text_color=TEXT)
+        self.suggestions_switch.select()                     # on by default
+        self.suggestions_switch.pack(anchor="w", pady=(0, 6))
+        self.app_awareness_switch = ctk.CTkSwitch(settings_body, text="APP AWARENESS", font=mono(11, True), text_color=TEXT)
+        self.app_awareness_switch.pack(anchor="w")           # off until you turn it on
+        ctk.CTkLabel(settings_body, text="Reads only the NAME of the app in front. Used for app triggers and the recap.",
+                     font=mono(10), text_color=DIM, anchor="w", justify="left", wraplength=210).pack(anchor="w", pady=(2, 8))
+        ctk.CTkButton(settings_body, text="TODAY'S RECAP", command=self.show_recap, height=28, corner_radius=0,
+                      border_width=1, border_color=BORDER, font=mono(11, True), text_color=TEXT,
+                      fg_color=BTN, hover_color=BTN_HOVER).pack(fill="x")
+        ctk.CTkButton(settings_body, text="PREVIEW SUGGESTION", command=self.preview_suggestion, height=28, corner_radius=0,
+                      border_width=1, border_color=BORDER, font=mono(11, True), text_color=TEXT,
+                      fg_color=BTN, hover_color=BTN_HOVER).pack(fill="x", pady=(6, 0))
 
         ctk.CTkLabel(settings_body, text="LAYOUT PRESETS", font=mono(11, True), text_color=DIM).pack(anchor="w", pady=(20, 5))
         save_row = ctk.CTkFrame(settings_body, fg_color="transparent")
@@ -457,11 +506,12 @@ class App(ctk.CTk):
 
     def open_settings(self):
         self.hide_menus()
-        width, height = 300, 460
+        width, height = SETTINGS_SIZE
         x = self.winfo_rootx() + self.winfo_width() - width - 10
         y = self.winfo_rooty() + 65
         self.settings_window.geometry(f"{width}x{height}+{x}+{y}")
         self.settings_window.deiconify()
+        self.refresh_preset_list()               # rebuild now that the window is visible
         self.settings_window.lift()
         self.settings_window.focus_force()
 
@@ -611,7 +661,122 @@ class App(ctk.CTk):
     def on_scene_finished(self, summary):
         """Called when a scene ends, whether it finished or was stopped."""
         self.last_scene_summary = summary
+        self.history.log_scene_run(summary)              # feeds the recap 
         self.automation_overlay.lift()
+        scene = self.scene_runner.scene or {}
+        if scene.get("show_recap") and summary["outcome"] == "completed":
+            self.after(1500, self.show_recap)            # let the DONE panel be seen first
+
+    # --- SUGGESTIONS AND RECAP ---
+
+    def check_triggers(self):
+        """Runs every TRIGGER_CHECK_MS: look at the front app, idle time and clock, and suggest a scene if one is due."""
+        try:
+            self._run_trigger_check()
+        except Exception as error:                       # a problem here must never stop the loop or the app
+            print("trigger check failed:", error)
+        finally:
+            self.after(TRIGGER_CHECK_MS, self.check_triggers)
+
+    def _bring_to_front(self):
+        """Suggestions are drawn inside this window, so make sure it is actually in front of other apps."""
+        try:
+            if self.state() == "iconic":
+                self.deiconify()
+            self.lift()
+            self.attributes("-topmost", True)                          # jump above other windows...
+            self.after(400, lambda: self.attributes("-topmost", False))  # ...then stop forcing it to stay there
+            self.focus_force()
+        except Exception as error:
+            print("could not bring the window to the front:", error)
+
+    def _debug(self, text):
+        """Print a trigger status line, but only when it changes (so the terminal doesn't fill up)."""
+        if DEBUG_TRIGGERS and text != getattr(self, "_last_debug", None):
+            self._last_debug = text
+            print("[triggers]", text)
+
+    def _run_trigger_check(self):
+        if not self.winfo_viewable():                    # the splash screen is still up
+            self._debug("waiting: main window not visible yet")
+            return
+        now = time.time()
+        self._refresh_trigger_scenes(now)
+        self.history.flush_if_due()
+
+        app_awareness_on = bool(self.app_awareness_switch.get())
+        front_app = get_frontmost_app() if app_awareness_on else None   # the app NAME only
+        idle_seconds = get_idle_seconds()
+
+        # Time per app for the daily recap, counted only while the computer is actually being used
+        if front_app and (idle_seconds is None or idle_seconds < ACTIVE_IDLE_LIMIT_SECONDS):
+            self.history.add_app_seconds(front_app, TRIGGER_CHECK_MS / 1000, now)
+
+        if not self.suggestions_switch.get():
+            self._debug("blocked: SUGGEST SCENES is switched off in Settings")
+            return
+        if self.scene_runner.is_running or self.automation_overlay.is_showing:
+            self._debug(f"blocked: scene running={self.scene_runner.is_running}, panel showing={self.automation_overlay.is_showing}")
+            return                                       # one thing on screen at a time
+        if self.grid_manager.drag.editing:
+            self._debug("blocked: edit mode is on")
+            return
+        self._debug(f"watching: front app={front_app!r}, APP AWARENESS={'on' if app_awareness_on else 'OFF'}, "
+                    f"idle time readable={idle_seconds is not None}")
+        suggestion = self.trigger_engine.check(now, front_app, idle_seconds)
+        if suggestion is not None:
+            self._debug(f"SUGGESTING {suggestion['scene'].get('name')}: {suggestion['reason']}")
+            self._bring_to_front()
+            self.hide_menus()
+            self.close_settings()
+            self.grid_manager.drag.cancel()
+            self.automation_overlay.show_suggestion(suggestion, self._suggestion_run, self._suggestion_dismissed)
+
+    def _refresh_trigger_scenes(self, now):
+        """Keep the trigger engine's scenes current: re-read scenes.json when it changes."""
+        try:
+            modified_time = os.path.getmtime(SCENES_FILE)
+        except OSError:
+            modified_time = None
+        scenes_changed = modified_time != self._scenes_modified_time
+        if scenes_changed:
+            self._scenes_modified_time = modified_time
+            self.trigger_engine.set_scenes(load_scenes())
+            if DEBUG_TRIGGERS:
+                counts = ", ".join(f"{s.get('name')}={len(s.get('triggers') or [])}" for s in self.trigger_engine.scenes)
+                print(f"[triggers] scenes read: {len(self.trigger_engine.scenes)} scenes, triggers per scene: {counts}")
+
+    def _suggestion_run(self, suggestion):
+        """RUN was pressed on a suggestion."""
+        self.run_scene(suggestion["scene"])
+
+    def _suggestion_dismissed(self, suggestion, mute_today):
+        """NOT NOW, NOT TODAY, or the suggestion timed out."""
+        self.trigger_engine.dismissed(suggestion, mute_today)
+
+    def preview_suggestion(self):
+        """Show the suggestion panel right now for one of your scenes, to check the panel itself works.
+        RUN really runs the scene. NOT NOW / NOT TODAY just close it (nothing is muted)."""
+        scenes = load_scenes()
+        scene = next((s for s in scenes if s.get("triggers")), scenes[0] if scenes else None)
+        if scene is None or self.scene_runner.is_running:
+            return
+        self.close_settings()
+        self.hide_menus()
+        self.grid_manager.drag.cancel()
+        suggestion = {"key": ("preview",), "scene": scene, "reason": "Preview (nothing triggered this)", "trigger_type": "preview"}
+        self.automation_overlay.show_suggestion(suggestion, self._suggestion_run, lambda s, mute_today: None)
+
+    def show_recap(self):
+        """Show today's recap: scenes run, and time per kind of app."""
+        if self.scene_runner.is_running:
+            return
+        self.close_settings()
+        self.hide_menus()
+        self.grid_manager.drag.cancel()
+        recap = day_recap(self.history, day_key(time.time()))
+        lines = recap_lines(recap, bool(self.app_awareness_switch.get()))
+        self.automation_overlay.show_recap("TODAY", lines)
 
     def _scene_go_to_page(self, page_index):
         """Used by the 'Go to page' step. Same as tapping that page's dot."""

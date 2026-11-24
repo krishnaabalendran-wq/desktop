@@ -14,6 +14,30 @@
           "c": 0
         }
       ]
+    },
+    {
+      "id": "notify-and-system",
+      "name": "notify and system",
+      "widgets": [
+        {
+          "type": "Notify",
+          "size": "2x2",
+          "bg": "#2b2216",
+          "fg": "#ffcc80",
+          "page": 0,
+          "r": 0,
+          "c": 0
+        },
+        {
+          "type": "System",
+          "size": "2x2",
+          "bg": "#1e3a5f",
+          "fg": "#87ceeb",
+          "page": 0,
+          "r": 0,
+          "c": 2
+        }
+      ]
     }
   ]
 }

@@ -4,10 +4,31 @@
       "id": "start-of-day",
       "name": "Start of day",
       "color": "#17492b",
+      "triggers": [
+        {
+          "type": "time",
+          "at": "09:00",
+          "days": [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri"
+          ]
+        }
+      ],
       "steps": [
         {
           "type": "open_link",
           "url": "https://calendar.google.com"
+        },
+        {
+          "type": "open_link",
+          "url": "https://mail.google.com"
+        },
+        {
+          "type": "set_volume",
+          "percent": 30
         },
         {
           "type": "go_to_page",
@@ -20,25 +41,25 @@
       ]
     },
     {
-      "id": "presentation",
-      "name": "Presentation",
-      "color": "#1b3a6b",
+      "id": "meeting",
+      "name": "Meeting",
+      "color": "#1e4d5c",
       "steps": [
         {
           "type": "set_volume",
-          "percent": 10
+          "percent": 50
         },
         {
           "type": "go_to_page",
-          "page": 2
+          "page": 1
         },
         {
-          "type": "wait",
-          "seconds": 3
+          "type": "open_link",
+          "url": "https://calendar.google.com"
         },
         {
           "type": "message",
-          "text": "Good luck!"
+          "text": "Meeting mode: open the invite and join"
         }
       ]
     },
@@ -46,18 +67,29 @@
       "id": "deep-work",
       "name": "Deep work",
       "color": "#5a4410",
+      "triggers": [
+        {
+          "type": "app_focused",
+          "app": "Calculator",
+          "seconds": 5
+        }
+      ],
       "steps": [
         {
           "type": "set_volume",
-          "percent": 20
+          "percent": 15
         },
         {
           "type": "go_to_page",
           "page": 3
         },
         {
+          "type": "copy_text",
+          "text": "Heads down on focused work. I'll reply within the hour."
+        },
+        {
           "type": "message",
-          "text": "Focus time"
+          "text": "Focus time. Status copied: paste it into chat"
         }
       ]
     },
@@ -65,6 +97,69 @@
       "id": "leaving",
       "name": "Leaving",
       "color": "#4a2a5a",
+      "triggers": [
+        {
+          "type": "time",
+          "at": "17:00",
+          "days": [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "type": "set_volume",
+          "percent": 0
+        },
+        {
+          "type": "go_to_page",
+          "page": 1
+        },
+        {
+          "type": "copy_text",
+          "text": "I've signed off for the day and will reply first thing tomorrow."
+        },
+        {
+          "type": "message",
+          "text": "See you tomorrow. Sign-off message copied"
+        }
+      ]
+    },
+    {
+      "id": "presentation",
+      "name": "Presentation",
+      "color": "#1b3a6b",
+      "triggers": [
+        {
+          "type": "app_focused",
+          "mac": "Keynote",
+          "windows": "POWERPNT.EXE",
+          "seconds": 5
+        }
+      ],
+      "steps": [
+        {
+          "type": "set_volume",
+          "percent": 40
+        },
+        {
+          "type": "go_to_page",
+          "page": 2
+        },
+        {
+          "type": "message",
+          "text": "Presenting: check your mic, close chat apps"
+        }
+      ]
+    },
+    {
+      "id": "standup",
+      "name": "Standup notes",
+      "color": "#2d5a4e",
       "steps": [
         {
           "type": "go_to_page",
@@ -72,11 +167,102 @@
         },
         {
           "type": "copy_text",
-          "text": "I'm out of the office and will reply tomorrow."
+          "text": "Yesterday:\n- \n\nToday:\n- \n\nBlockers:\n- "
         },
         {
           "type": "message",
-          "text": "See you tomorrow"
+          "text": "Standup template copied: paste it"
+        }
+      ]
+    },
+    {
+      "id": "running-late",
+      "name": "Running late",
+      "color": "#7a3b1d",
+      "steps": [
+        {
+          "type": "copy_text",
+          "text": "Running a few minutes late. Please start without me, I'll join shortly."
+        },
+        {
+          "type": "message",
+          "text": "Message copied: paste it into chat"
+        }
+      ]
+    },
+    {
+      "id": "back-in-10",
+      "name": "Back in 10",
+      "color": "#3b4a6b",
+      "triggers": [
+        {
+          "type": "idle",
+          "minutes": 0.6
+        }
+      ],
+      "steps": [
+        {
+          "type": "copy_text",
+          "text": "Stepping away for 10 minutes. Back shortly."
+        },
+        {
+          "type": "message",
+          "text": "Away message copied: paste it into chat"
+        }
+      ]
+    },
+    {
+      "id": "lunch",
+      "name": "Lunch break",
+      "color": "#5a2f3f",
+      "triggers": [
+        {
+          "type": "time",
+          "at": "12:00",
+          "days": [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "type": "set_volume",
+          "percent": 0
+        },
+        {
+          "type": "go_to_page",
+          "page": 1
+        },
+        {
+          "type": "copy_text",
+          "text": "Out for lunch. Back in 45 minutes."
+        },
+        {
+          "type": "message",
+          "text": "Enjoy lunch. Away message copied"
+        }
+      ]
+    },
+    {
+      "id": "weekly-update",
+      "name": "Weekly update",
+      "color": "#3d3d5c",
+      "steps": [
+        {
+          "type": "go_to_page",
+          "page": 1
+        },
+        {
+          "type": "copy_text",
+          "text": "Weekly update\n\nDone this week:\n- \n\nNext week:\n- \n\nBlockers:\n- "
+        },
+        {
+          "type": "message",
+          "text": "Weekly update template copied: paste it"
         }
       ]
     }

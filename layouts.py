@@ -13,7 +13,7 @@ def load_presets():
         return []
     try:
         with open(PRESETS_FILE, "r") as presets_file:
-            raw_presets = json.load(presets_file)
+            raw_presets = json.load(presets_file)["layouts"]       # the file is saved as {"layouts": [...]}
     except (OSError, ValueError, KeyError, TypeError) as error:
         print("layout_presents.json could not be read:", error)
         return []
