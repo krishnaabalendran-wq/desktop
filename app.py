@@ -14,7 +14,6 @@ from scene_runner import SceneRunner
 from automation_overlay import AutomationOverlay
 from layouts import load_presets, save_preset, delete_preset, find_preset
 from scenes import SCENES_FILE, load_scenes
-from actions import OS_KEYS, SYSTEM
 from context import get_frontmost_app, get_idle_seconds
 from triggers import TriggerEngine
 from history import History, day_key, day_recap, recap_lines
@@ -265,10 +264,10 @@ class App(ctk.CTk):
         
         self.automation_overlay = AutomationOverlay(self)
         self.automation_overlay.covered = [self.topbar_frame, self.grid_manager]
-        self.scene_runner = SceneRunner(context=SceneContext(go_to_page=self._scene_go_to_page, copy_to_clipboard=self._scene_copy_text, apply_layout=self.apply_layout_preset), schedule=self.after, cancel_schedule=self.after_cancel, on_change=self.automation_overlay.refresh, on_finished=self.on_scene_finished, apply_layout=self.apply_layout_preset)
+        self.scene_runner = SceneRunner(context=SceneContext(), schedule=self.after, cancel_schedule=self.after_cancel, on_change=self.automation_overlay.refresh, on_finished=self.on_scene_finished, apply_layout=self.apply_layout_preset)
         
         self.history = History()
-        self.trigger_engine = TriggerEngine(OS_KEYS.get(SYSTEM, ""))
+        self.trigger_engine = TriggerEngine()
         self._scenes_modified_time = -1.0        # so scenes.json is read the first time and again whenever it changes
         self.after(5000, self.check_triggers)
 
@@ -755,12 +754,3 @@ class App(ctk.CTk):
         recap = day_recap(self.history, day_key(time.time()))
         lines = recap_lines(recap, bool(self.app_awareness_switch.get()))
         self.automation_overlay.show_recap("TODAY", lines)
-
-    def _scene_go_to_page(self, page_index):
-        """Used by the 'Go to page' step. Same as tapping that page's dot."""
-        self.on_dot_clicked(page_index)
-
-    def _scene_copy_text(self, text):
-        """Used by the 'Copy text' step."""
-        self.clipboard_clear()
-        self.clipboard_append(text)

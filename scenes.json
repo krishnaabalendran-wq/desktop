@@ -15,8 +15,9 @@
       "steps": [
         { "type": "open_link", "url": "https://calendar.google.com" },
         { "type": "open_link", "url": "https://mail.google.com" },
-        { "type": "open_app", "mac": "Slack", "windows": "Slack", "app": "slack" },
+        { "type": "open_app", "app": "Slack" },
         { "type": "set_volume", "percent": 25 },
+        { "type": "send_notification", "title": "Morning briefing", "text": "Calendar, email, and Slack are ready." },
         { "type": "message", "text": "Morning briefing ready" }
       ]
     },
@@ -35,7 +36,7 @@
       "steps": [
         { "type": "open_link", "url": "https://calendar.google.com" },
         { "type": "open_link", "url": "https://github.com" },
-        { "type": "open_app", "mac": "Slack", "windows": "Slack", "app": "slack" },
+        { "type": "open_app", "app": "Slack" },
         { "type": "set_volume", "percent": 45 },
         { "type": "message", "text": "Standup prep ready" }
       ]
@@ -47,15 +48,13 @@
       "triggers": [
         {
           "type": "app_focused",
-          "mac": "Terminal",
-          "windows": "WindowsTerminal",
-          "app": "terminal",
-          "seconds": 10,
+          "app": "Terminal",
+          "seconds": 5,
           "reason": "Terminal is open"
         }
       ],
       "steps": [
-        { "type": "open_app", "mac": "Visual Studio Code", "windows": "Code", "app": "code" },
+        { "type": "open_app", "app": "Visual Studio Code" },
         { "type": "open_link", "url": "https://github.com" },
         { "type": "set_volume", "percent": 20 },
         { "type": "message", "text": "Development environment ready" }
@@ -68,16 +67,14 @@
       "triggers": [
         {
           "type": "app_focused",
-          "mac": "Visual Studio Code",
-          "windows": "Code",
-          "app": "code",
-          "seconds": 15,
+          "app": "Visual Studio Code",
+          "seconds": 10,
           "reason": "You look like you're starting focused work"
         }
       ],
       "steps": [
         { "type": "set_volume", "percent": 10 },
-        { "type": "open_app", "mac": "Spotify", "windows": "Spotify", "app": "spotify" },
+        { "type": "open_app", "app": "Spotify" },
         { "type": "wait", "seconds": 3 },
         { "type": "message", "text": "Focus mode on" }
       ]
@@ -89,30 +86,26 @@
       "triggers": [
         {
           "type": "app_focused",
-          "mac": "Obsidian",
-          "windows": "Obsidian",
-          "app": "obsidian",
+          "app": "Obsidian",
           "seconds": 10,
           "reason": "Notes app is open"
         }
       ],
       "steps": [
-        { "type": "open_app", "mac": "Google Chrome", "windows": "chrome", "app": "chrome" },
-        { "type": "open_link", "url": "https://github.com" },
+        { "type": "open_app", "app": "Google Chrome" },
+        { "type": "open_path", "path": "~/Documents/Obsidian" },
         { "type": "set_volume", "percent": 15 },
         { "type": "message", "text": "Documentation workspace ready" }
       ]
     },
     {
       "id": "call-mode",
-      "name": "Call Mode",
+      "name": "Call mode",
       "color": "#1b3a6b",
       "triggers": [
         {
           "type": "app_focused",
-          "mac": "Zoom",
-          "windows": "Zoom",
-          "app": "zoom",
+          "app": "Zoom",
           "seconds": 10,
           "reason": "Zoom is open"
         }
@@ -120,6 +113,7 @@
       "steps": [
         { "type": "set_volume", "percent": 50 },
         { "type": "open_link", "url": "https://calendar.google.com" },
+        { "type": "send_notification", "title": "Call mode", "text": "Check your mic and camera." },
         { "type": "message", "text": "Call mode ready" }
       ]
     },
@@ -130,16 +124,14 @@
       "triggers": [
         {
           "type": "app_focused",
-          "mac": "Keynote",
-          "windows": "POWERPNT.EXE",
-          "app": "powerpoint",
+          "app": "Keynote",
           "seconds": 10,
           "reason": "Presentation app is open"
         }
       ],
       "steps": [
         { "type": "set_volume", "percent": 40 },
-        { "type": "open_app", "mac": "Google Chrome", "windows": "chrome", "app": "chrome" },
+        { "type": "open_app", "app": "Google Chrome" },
         { "type": "wait", "seconds": 2 },
         { "type": "message", "text": "Presentation mode ready" }
       ]
@@ -151,17 +143,16 @@
       "triggers": [
         {
           "type": "app_focused",
-          "mac": "Obsidian",
-          "windows": "Obsidian",
-          "app": "obsidian",
+          "app": "Obsidian",
           "seconds": 20,
           "reason": "Writing time"
         }
       ],
       "steps": [
         { "type": "set_volume", "percent": 10 },
-        { "type": "open_app", "mac": "Spotify", "windows": "Spotify", "app": "spotify" },
+        { "type": "open_app", "app": "Spotify" },
         { "type": "wait", "seconds": 3 },
+        { "type": "create_folder", "parent": "~/Documents/Writing", "name": "Writing sprint - {date}" },
         { "type": "message", "text": "Writing sprint started" }
       ]
     },
@@ -180,6 +171,7 @@
       "steps": [
         { "type": "open_link", "url": "https://www.youtube.com" },
         { "type": "open_link", "url": "https://gemini.google.com" },
+        { "type": "web_search", "query": "best productivity techniques {date}" },
         { "type": "set_volume", "percent": 25 },
         { "type": "message", "text": "Learning block ready" }
       ]
@@ -199,6 +191,7 @@
       "steps": [
         { "type": "set_volume", "percent": 0 },
         { "type": "open_link", "url": "https://www.google.com/maps" },
+        { "type": "send_notification", "title": "Lunch", "text": "Time to take a break." },
         { "type": "message", "text": "Lunch break" }
       ]
     },
@@ -249,10 +242,30 @@
         }
       ],
       "steps": [
-        { "type": "run_command", "mac": "open ~/Documents/Invoices", "windows": "explorer \"%USERPROFILE%\\Documents\\Invoices\"", "command": "xdg-open ~/Documents/Invoices", "timeout": 10 },
+        { "type": "open_path", "path": "~/Documents/Invoices" },
+        { "type": "open_file", "path": "~/Documents/Invoices/invoice-template.pdf" },
         { "type": "open_link", "url": "https://www.google.com" },
         { "type": "set_volume", "percent": 15 },
         { "type": "message", "text": "Invoice workspace ready" }
+      ]
+    },
+    {
+      "id": "project-archive",
+      "name": "Project archive",
+      "color": "#2b4a5a",
+      "triggers": [
+        {
+          "type": "time",
+          "at": "16:00",
+          "days": ["Fri"],
+          "reason": "Weekly project cleanup"
+        }
+      ],
+      "steps": [
+        { "type": "create_folder", "parent": "~/Documents/Archives", "name": "Archive - {date}" },
+        { "type": "open_path", "path": "~/Documents/Archives" },
+        { "type": "send_notification", "title": "Project archive", "text": "Archive folder created." },
+        { "type": "message", "text": "Archive folder ready" }
       ]
     },
     {
@@ -270,7 +283,7 @@
       "steps": [
         { "type": "open_link", "url": "https://calendar.google.com" },
         { "type": "open_link", "url": "https://github.com" },
-        { "type": "open_app", "mac": "Obsidian", "windows": "Obsidian", "app": "obsidian" },
+        { "type": "open_app", "app": "Obsidian" },
         { "type": "set_volume", "percent": 20 },
         { "type": "message", "text": "Weekly planning mode" }
       ]
@@ -289,10 +302,14 @@
       ],
       "steps": [
         { "type": "set_volume", "percent": 0 },
-        { "type": "run_command", "mac": "osascript -e 'tell application \"Slack\" to quit'", "windows": "taskkill /IM Slack.exe /F", "command": "pkill Slack", "timeout": 10 },
-        { "type": "message", "text": "Workday complete" },
+        {
+          "type": "run_command",
+          "command": "osascript -e 'tell application \"Slack\" to quit'",
+          "timeout": 10
+        },
         { "type": "wait", "seconds": 5 },
-        { "type": "run_command", "mac": "pmset sleepnow", "timeout": 5}
+        { "type": "send_notification", "title": "End of day", "text": "Workday complete. Going home." },
+        { "type": "sleep_mac" }
       ]
     }
   ]

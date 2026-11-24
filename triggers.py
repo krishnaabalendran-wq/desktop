@@ -10,9 +10,8 @@ IDLE_RETURN_SECONDS = 30         # idle less than this means the person is back,
 
 
 def normalize_app_name(name):
-    """Lower-case and drop '.exe', so 'POWERPNT.EXE' and 'powerpnt' match."""
-    name = str(name).strip().lower()
-    return name[:-4] if name.endswith(".exe") else name
+    """Lower-case the macOS app name for comparison."""
+    return str(name).strip().lower()
 
 
 def app_names_match(first, second):
@@ -37,16 +36,15 @@ def day_key(epoch_seconds):
 
 
 class TriggerEngine:
-    def __init__(self, os_key):
-        self.os_key = os_key                 # "mac", "windows" or "linux": picks the app name for this computer
+    def __init__(self):
         self.scenes = []
-        self.habit_triggers = []             # extra time triggers learned from history (see habits.py)
+        self.habit_triggers = []
 
-        self._focus_started = {}             # trigger key -> when its app came to the front
-        self._quiet_until = {}               # trigger key -> epoch time before which it stays quiet
-        self._muted_on_day = {}              # scene id -> the date it was muted for ("not today")
-        self._time_shown_on_day = {}         # trigger key -> the date a time trigger was already offered
-        self._idle_ready = {}                # trigger key -> False after firing, True again once the person is back
+        self._focus_started = {}
+        self._quiet_until = {}
+        self._muted_on_day = {}
+        self._time_shown_on_day = {}
+        self._idle_ready = {}
 
     def set_scenes(self, scenes):
         self.scenes = list(scenes)
@@ -104,9 +102,9 @@ class TriggerEngine:
         kind = trigger.get("type")
 
         if kind == "app_focused":
-            wanted_app = trigger.get(self.os_key) or trigger.get("app")
+            wanted_app = trigger.get("app")
             if not wanted_app or not front_app or not app_names_match(front_app, wanted_app):
-                self._focus_started.pop(key, None)       # not in front (any more): start counting again next time
+                self._focus_started.pop(key, None)
                 return None
             started = self._focus_started.setdefault(key, now)
             try:
