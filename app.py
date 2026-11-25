@@ -371,7 +371,7 @@ class App(ctk.CTk):
                                                 scrollbar_button_hover_color=BORDER_HOVER)
         self.menu_scroll.pack(padx=10, pady=10, fill="both", expand=True)
 
-        widgets_to_add = ["Timer", "Volume", "Weather", "Notify", "System", "Date", "Scenes", "voiceassistant"]
+        widgets_to_add = ["Timer", "Volume", "Weather", "Notify", "System", "Date", "Scenes", "voiceassistant", "Processes"]
         sizes = ["1x1", "2x1", "2x2"]
 
         for w_type in widgets_to_add:
