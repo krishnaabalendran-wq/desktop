@@ -246,6 +246,7 @@ class Widget(ctk.CTkFrame):
             "System": self.build_system,
             "Scenes": self.build_scenes,
             "voiceassistant": self.build_voiceassistant,
+            "Processes": self.build_processes,
         }
         builders.get(widget_type, self.build_default)()
 
@@ -367,6 +368,238 @@ class Widget(ctk.CTkFrame):
         self.volume_slider.set(current)
         self.volume_label.configure(text=f"{current}%")
         self.volume_slider.place(relx=0.5, rely=0.45, anchor="center", relwidth=0.75)
+
+
+    # ============================================
+    # PROCESSES (Mini Process Killer)
+    #    1x1 -> hero stat + top process + usage bar + Kill button
+    #    2x1 -> top 3 process cards + usage bars + Kill buttons
+    #    2x2 -> top 5 process cards + usage bars + Kill buttons + status
+    # ============================================
+    PROCESS_REFRESH_MS = 2500
+    PROCESS_SKIP_NAMES = {"kernel_task", "launchd", "System Idle Process", "System", "Idle"}
+
+    def build_processes(self):
+        self.add_title("Processes")
+        dim = blend(self.fg, self.bg, 0.35)
+        card_bg = blend("#0a0a0a", self.fg, 0.08)
+        bar_bg = blend("#0a0a0a", self.fg, 0.16)
+        self._proc_dim = dim
+        self._proc_mode = "CPU"
+        self._proc_rows = []
+        self._proc_status = None
+        self._proc_my_pid = os.getpid()
+
+        if psutil is None:
+            self._weather_label("Needs psutil\npip install psutil", 9, dim, justify="center",
+                                relx=0.5, rely=0.55, anchor="center")
+            return
+
+        toggle_wrap = ctk.CTkFrame(
+            self, height=20, width=76, corner_radius=4,
+            fg_color=card_bg, border_width=1, border_color=blend("#0a0a0a", self.fg, 0.18)
+        )
+        toggle_wrap.place(relx=1.0, x=-self.TEXT_PAD_X, y=self.TEXT_PAD_Y - 1, anchor="ne")
+        toggle_wrap.pack_propagate(False)
+
+        self._proc_cpu_btn = ctk.CTkButton(
+            toggle_wrap, text="CPU", width=36, height=16, corner_radius=3,
+            font=mono(9, True), command=lambda: self._proc_set_mode("CPU")
+        )
+        self._proc_cpu_btn.place(x=2, rely=0.5, anchor="w")
+
+        self._proc_ram_btn = ctk.CTkButton(
+            toggle_wrap, text="RAM", width=36, height=16, corner_radius=3,
+            font=mono(9, True), command=lambda: self._proc_set_mode("RAM")
+        )
+        self._proc_ram_btn.place(relx=1.0, x=-2, rely=0.5, anchor="e")
+        self._proc_style_toggle()
+
+        kill_style = dict(
+            corner_radius=4,
+            text_color="#ff6b6b",
+            fg_color="#241212",
+            hover_color="#a83232",
+            border_width=1,
+            border_color="#6e2424",
+        )
+
+        if self.size == "1x1":
+            val_lbl = self._weather_label(
+                "--%", 28, self.fg, bold=True,
+                relx=0.5, rely=0.38, anchor="center"
+            )
+            name_lbl = self._weather_label(
+                "Scanning...", 10, dim, wrap=125,
+                relx=0.5, rely=0.56, anchor="center"
+            )
+            bar = ctk.CTkProgressBar(
+                self, height=4, corner_radius=2,
+                progress_color=self.fg, fg_color=bar_bg
+            )
+            bar.set(0)
+            bar.place(relx=0.5, rely=0.68, relwidth=0.82, anchor="center")
+
+            kill_btn = ctk.CTkButton(
+                self, text="KILL PROCESS", height=26, font=mono(10, True),
+                command=lambda: self._proc_kill(0), **kill_style
+            )
+            kill_btn.place(relx=0.5, rely=0.85, relwidth=0.82, anchor="center")
+            self._proc_rows.append((name_lbl, val_lbl, bar, kill_btn, None))
+        else:
+            if self.size == "2x1":
+                count, top, step, row_h, max_chars = 3, 0.25, 0.24, 34, 18
+            else:
+                count, top, step, row_h, max_chars = 5, 0.17, 0.145, 38, 22
+                ctk.CTkFrame(
+                    self, height=1, corner_radius=0,
+                    fg_color=blend(self.bg, self.fg, 0.18)
+                ).place(relx=0.5, rely=0.88, anchor="center", relwidth=0.88)
+
+                self._proc_status = self._weather_label(
+                    "Ready", 10, dim,
+                    relx=0.5, rely=0.94, anchor="center"
+                )
+
+            self._proc_max_chars = max_chars
+            for idx in range(count):
+                row = ctk.CTkFrame(
+                    self, height=row_h, corner_radius=6,
+                    fg_color=card_bg, border_width=1,
+                    border_color=blend("#0a0a0a", self.fg, 0.12)
+                )
+                row.place(relx=0.5, rely=top + idx * step, relwidth=0.90, anchor="n")
+                row.pack_propagate(False)
+
+                name_lbl = ctk.CTkLabel(
+                    row, text="--", text_color=self.fg,
+                    font=mono(10, True), anchor="w", fg_color="transparent"
+                )
+                name_lbl.place(x=10, rely=0.36, anchor="w")
+
+                val_lbl = ctk.CTkLabel(
+                    row, text="--", text_color=dim,
+                    font=mono(10), anchor="e", fg_color="transparent"
+                )
+                val_lbl.place(relx=1.0, x=-56, rely=0.36, anchor="e")
+
+                bar = ctk.CTkProgressBar(
+                    row, height=3, corner_radius=2,
+                    progress_color=self.fg, fg_color=bar_bg
+                )
+                bar.set(0)
+                bar.place(x=10, rely=0.76, relwidth=0.72, anchor="w")
+
+                kill_btn = ctk.CTkButton(
+                    row, text="KILL", width=42, height=20, font=mono(9, True),
+                    command=lambda i=idx: self._proc_kill(i), **kill_style
+                )
+                kill_btn.place(relx=1.0, x=-8, rely=0.5, anchor="e")
+
+                self._proc_rows.append((name_lbl, val_lbl, bar, kill_btn, None))
+
+        self._proc_tick()
+
+    def _proc_style_toggle(self):
+        active_bg = blend(self.bg, self.fg, 0.35)
+        for btn, mode in ((self._proc_cpu_btn, "CPU"), (self._proc_ram_btn, "RAM")):
+            if self._proc_mode == mode:
+                btn.configure(fg_color=active_bg, hover_color=active_bg, text_color=self.fg)
+            else:
+                btn.configure(fg_color="transparent", hover_color=blend("#0a0a0a", self.fg, 0.15), text_color=self._proc_dim)
+
+    def _proc_set_mode(self, mode):
+        if self._proc_mode == mode:
+            return
+        self._proc_mode = mode
+        self._proc_style_toggle()
+        self._proc_scan_async()
+
+    def _proc_load_color(self, val):
+        if val >= 50.0:
+            return "#ff5c5c"
+        if val >= 20.0:
+            return "#f0a500"
+        return self.fg
+
+    def _proc_tick(self):
+        if not self.winfo_exists():
+            return
+        self._proc_scan_async()
+        self.after(self.PROCESS_REFRESH_MS, self._proc_tick)
+
+    def _proc_scan_async(self):
+        threading.Thread(target=self._proc_scan_worker, daemon=True).start()
+
+    def _proc_scan_worker(self):
+        procs = []
+        mode = self._proc_mode
+        for p in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent"]):
+            try:
+                info = p.info
+                pid = info["pid"]
+                name = info["name"] or ""
+                if pid <= 1 or pid == self._proc_my_pid or name in self.PROCESS_SKIP_NAMES:
+                    continue
+                val = (info["cpu_percent"] or 0.0) if mode == "CPU" else (info["memory_percent"] or 0.0)
+                procs.append((val, pid, name))
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
+        procs.sort(key=lambda item: item[0], reverse=True)
+        top_items = procs[:len(self._proc_rows)]
+
+        try:
+            self.after(0, lambda: self._proc_apply(top_items, mode))
+        except Exception:
+            pass
+
+    def _proc_apply(self, top_items, mode):
+        if not self.winfo_exists():
+            return
+        max_chars = 16 if self.size == "1x1" else self._proc_max_chars
+
+        for idx, (name_lbl, val_lbl, bar, kill_btn, _) in enumerate(self._proc_rows):
+            if idx < len(top_items):
+                val, pid, name = top_items[idx]
+                short_name = name if len(name) <= max_chars else name[:max_chars - 1] + "\u2026"
+                load_color = self._proc_load_color(val)
+                name_lbl.configure(text=short_name)
+                val_lbl.configure(text=f"{val:.0f}%" if self.size == "1x1" else f"{val:.1f}%", text_color=load_color)
+                bar.set(min(1.0, val / 100.0))
+                bar.configure(progress_color=load_color)
+                kill_btn.configure(state="normal")
+                self._proc_rows[idx] = (name_lbl, val_lbl, bar, kill_btn, (pid, name))
+            else:
+                name_lbl.configure(text="--")
+                val_lbl.configure(text="--", text_color=self._proc_dim)
+                bar.set(0)
+                bar.configure(progress_color=self.fg)
+                kill_btn.configure(state="disabled")
+                self._proc_rows[idx] = (name_lbl, val_lbl, bar, kill_btn, None)
+
+    def _proc_kill(self, idx):
+        target = self._proc_rows[idx][4]
+        if target is None:
+            return
+        pid, name = target
+        try:
+            psutil.Process(pid).kill()
+            msg = f"Killed {name}"
+            color = self.fg
+        except psutil.NoSuchProcess:
+            msg = f"{name} already closed"
+            color = self._proc_dim
+        except psutil.AccessDenied:
+            msg = f"Access denied: {name}"
+            color = "#ff6b6b"
+        except Exception:
+            msg = f"Failed to kill {name}"
+            color = "#ff6b6b"
+
+        if self._proc_status is not None:
+            self._proc_status.configure(text=msg, text_color=color)
+        self._proc_scan_async()
 
     # ============================================
     # WEATHER LAYOUTS
@@ -1077,14 +1310,33 @@ class Widget(ctk.CTkFrame):
 
     @staticmethod
     def _voiceassistant_remove_wake_word(query):
-        for word in voiceassistant_WAKE_WORDS:
-            if query == word:
-                return ""
-            if query.startswith(word + " "):
-                return query[len(word):].strip()
-            if query.startswith(word + ","):
-                return query[len(word) + 1:].strip()
-        return None
+        words = query.split()
+        after = None
+        for i, word in enumerate(words):
+            cleaned = word.strip(",.!?")
+            if cleaned in voiceassistant_WAKE_WORDS:
+                after = " ".join(words[i + 1:]).strip()
+                break
+
+        if after is None:
+            return None
+
+        polite_openers = [
+            "could you please",
+            "can you please",
+            "would you please",
+            "could you",
+            "can you",
+            "would you",
+            "will you",
+            "please",
+        ]
+        for opener in polite_openers:
+            if after.startswith(opener + " "):
+                after = after[len(opener):].strip()
+                break
+
+        return after
 
     @staticmethod
     def _voiceassistant_get_direct_website(command):
@@ -1164,6 +1416,15 @@ class Widget(ctk.CTkFrame):
                 break
 
         front_phrases = [
+            "could you please",
+            "can you please",
+            "would you please",
+            "could you",
+            "can you",
+            "would you",
+            "will you",
+            "i want you to",
+            "i want to",
             "search up",
             "search for",
             "look up",
@@ -1173,7 +1434,7 @@ class Widget(ctk.CTkFrame):
             "open up",
         ]
         front_words = [
-            "go", "to", "open", "search", "google", "youtube",
+            "please", "go", "to", "open", "search", "google", "youtube",
             "play", "watch", "find", "up", "for", "on", "about", "and",
         ]
 
