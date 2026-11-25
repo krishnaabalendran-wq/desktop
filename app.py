@@ -25,6 +25,8 @@ DEBUG_TRIGGERS = True                    # prints why suggestions do or don't ap
 ACTIVE_IDLE_LIMIT_SECONDS = 120          # app time only counts if the computer was used in the last 2 minutes
 SETTINGS_SIZE = (300, 560)               # width, height of the Settings window
 
+SESSION_FILE = "saved_pages.json"
+
 
 class BrandLogo(ctk.CTkFrame):
     """Recreates the CSS rotated square with gradient inner square."""
@@ -187,6 +189,8 @@ class App(ctk.CTk):
         self.dots_container = ctk.CTkFrame(self.topbar_frame, fg_color="transparent")
         self.dots_container.grid(row=0, column=1, sticky="nsew", pady=15)
 
+        self.current_page_index = 0
+
         self.title_label = ctk.CTkLabel(self.dots_container, text="MEETINGS", font=mono(11, True), text_color=DIM)
         self.title_label.pack(side="left", padx=(0, 10))
 
@@ -252,12 +256,19 @@ class App(ctk.CTk):
         self.grid_manager = GridManager(master=self, fg_color="transparent")
         self.grid_manager.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
 
+        self.load_page_layouts()
+
         self.menu_is_open = False
         self.size_menu_is_open = False
         self.color_menu_is_open = False
         self.settings_is_open = False
         self.pending_widget_type = ""
         self.pending_size = ""
+
+        self.settings_window = None
+        self.appearance_var = ctk.StringVar(value="Dark")
+        self.suggestions_var = ctk.BooleanVar(value=True)
+        self.app_awareness_var = ctk.BooleanVar(value=False)
 
         self.create_widget_menus()
         self.grid_manager.drag.on_edit_request = self.toggle_edit_mode   # holding a tile turns on edit mode
@@ -282,12 +293,11 @@ class App(ctk.CTk):
         # Reveal the main window after 2.5 seconds
         self.after(2500, self.end_loading)
 
+
     def end_loading(self):
         self.splash.stop()
         self.splash.destroy()
         self.deiconify()  # Brings the fully loaded main window onto the screen
-        # CTkToplevel windows can re-appear shortly after startup even though they were hidden,
-        # so make sure settings starts closed (once now, once after customtkinter's own delayed setup).
 
     # --- SAVE / LOAD MECHANISM ---
     def save_layout_and_settings(self):
@@ -298,9 +308,9 @@ class App(ctk.CTk):
                 json.dump(layout, f)
                 
         settings = {
-            "appearance": self.mode_switch.get() if hasattr(self, "mode_switch") else "Dark",
-            "suggestions_enabled": bool(self.suggestions_switch.get()) if hasattr(self, "suggestions_switch") else True,
-            "app_awareness": bool(self.app_awareness_switch.get()) if hasattr(self, "app_awareness_switch") else False,
+            "appearance": self.appearance_var.get(),
+            "suggestions_enabled": bool(self.suggestions_var.get()),
+            "app_awareness": bool(self.app_awareness_var.get()),
         }
         with open("settings.json", "w") as f:
             json.dump(settings, f)
@@ -312,17 +322,11 @@ class App(ctk.CTk):
                     settings = json.load(f)
                     mode = settings.get("appearance", "Dark")
                     ctk.set_appearance_mode(mode)
-                    if hasattr(self, "mode_switch"):
-                        self.mode_switch.set(mode)
-                    if hasattr(self, "suggestions_switch"):
-                        if settings.get("suggestions_enabled", True):
-                            self.suggestions_switch.select()
-                        else:
-                            self.suggestions_switch.deselect()
-                        if settings.get("app_awareness", False):
-                            self.app_awareness_switch.select()
-                        else:
-                            self.app_awareness_switch.deselect()
+                    mode = settings.get("appearance", "Dark")
+                    ctk.set_appearance_mode(mode)
+                    self.appearance_var.set(mode)
+                    self.suggestions_var.set(settings.get("suggestions_enabled", True))
+                    self.app_awareness_var.set(settings.get("app_awareness", False))
             else:
                 ctk.set_appearance_mode("Dark")
         except Exception as e:
@@ -341,6 +345,7 @@ class App(ctk.CTk):
 
     def on_closing(self):
         self.save_layout_and_settings()
+        self.save_page_layouts()
         if hasattr(self, "history"):
             self.history.flush()                     # save any app time not yet written to disk
         self.destroy()
@@ -352,6 +357,7 @@ class App(ctk.CTk):
         self.after(1000, self.update_clock)
 
     def on_dot_clicked(self, index, animate=True):
+        self.current_page_index = index
         for i, dot in enumerate(self.dots):
             color = ("#111111", "#ffffff") if i == index else ("#d1d1d6", "#333333")
             dot.configure(fg_color=color)
@@ -392,45 +398,40 @@ class App(ctk.CTk):
                                        border_width=1, border_color=BORDER)
         self.color_menu.grid_propagate(False)
 
+    def build_settings_window(self):
         self.settings_window = ctk.CTkToplevel(self, fg_color=SURFACE)
         self.settings_window.title("Settings")
         self.settings_window.geometry(f"{SETTINGS_SIZE[0]}x{SETTINGS_SIZE[1]}")
         self.settings_window.minsize(260, 320)
         self.settings_window.transient(self)
-        self.settings_window.withdraw()
         self.settings_window.protocol("WM_DELETE_WINDOW", self.close_settings)
 
         settings_body = ctk.CTkFrame(self.settings_window, fg_color="transparent")
         settings_body.pack(fill="both", expand=True, padx=15, pady=15)
-        
-        mode_label = ctk.CTkLabel(settings_body, text="APPEARANCE", font=mono(11, True), text_color=DIM)
-        mode_label.pack(anchor="w", pady=(10, 5))
-        
+
+        ctk.CTkLabel(settings_body, text="APPEARANCE", font=mono(11, True), text_color=DIM).pack(anchor="w", pady=(10, 5))
         self.mode_switch = ctk.CTkSegmentedButton(
-            settings_body, 
-            values=["Dark", "Light"],
-            command=self.change_appearance_mode,
-            font=mono(11, True),
-            fg_color=BG,
-            selected_color=BORDER_HOVER,
-            unselected_color=SURFACE,
+            settings_body, values=["Dark", "Light"], variable=self.appearance_var,
+            command=self.change_appearance_mode, font=mono(11, True),
+            fg_color=BG, selected_color=BORDER_HOVER, unselected_color=SURFACE,
             selected_hover_color=BORDER
         )
-        self.mode_switch.set("Dark")
         self.mode_switch.pack(fill="x")
 
-        # --- SUGGESTIONS ---
         ctk.CTkLabel(settings_body, text="SUGGESTIONS", font=mono(11, True), text_color=DIM).pack(anchor="w", pady=(20, 5))
-        self.suggestions_switch = ctk.CTkSwitch(settings_body, text="SUGGEST SCENES", font=mono(11, True), text_color=TEXT)
-        self.suggestions_switch.select()                     # on by default
+        self.suggestions_switch = ctk.CTkSwitch(settings_body, text="SUGGEST SCENES", font=mono(11, True),
+                                                text_color=TEXT, variable=self.suggestions_var,
+                                                onvalue=True, offvalue=False)
         self.suggestions_switch.pack(anchor="w", pady=(0, 6))
-        self.app_awareness_switch = ctk.CTkSwitch(settings_body, text="APP AWARENESS", font=mono(11, True), text_color=TEXT)
-        self.app_awareness_switch.pack(anchor="w")           # off until you turn it on
+        self.app_awareness_switch = ctk.CTkSwitch(settings_body, text="APP AWARENESS", font=mono(11, True),
+                                                text_color=TEXT, variable=self.app_awareness_var,
+                                                onvalue=True, offvalue=False)
+        self.app_awareness_switch.pack(anchor="w") 
         ctk.CTkLabel(settings_body, text="Reads only the NAME of the app in front. Used for app triggers and the recap.",
-                     font=mono(10), text_color=DIM, anchor="w", justify="left", wraplength=210).pack(anchor="w", pady=(2, 8))
+                        font=mono(10), text_color=DIM, anchor="w", justify="left", wraplength=210).pack(anchor="w", pady=(2, 8))
         ctk.CTkButton(settings_body, text="TODAY'S RECAP", command=self.show_recap, height=28, corner_radius=0,
-                      border_width=1, border_color=BORDER, font=mono(11, True), text_color=TEXT,
-                      fg_color=BTN, hover_color=BTN_HOVER).pack(fill="x")
+                        border_width=1, border_color=BORDER, font=mono(11, True), text_color=TEXT,
+                        fg_color=BTN, hover_color=BTN_HOVER).pack(fill="x")
 
         ctk.CTkLabel(settings_body, text="LAYOUT PRESETS", font=mono(11, True), text_color=DIM).pack(anchor="w", pady=(20, 5))
         save_row = ctk.CTkFrame(settings_body, fg_color="transparent")
@@ -452,7 +453,6 @@ class App(ctk.CTk):
         self.preset_status.pack(anchor="w", pady=(4, 4))
         self.preset_list = ctk.CTkScrollableFrame(settings_body, fg_color="transparent", corner_radius=0)
         self.preset_list.pack(fill="both", expand=True)
-        self.refresh_preset_list()
 
     def change_appearance_mode(self, new_mode: str):
         """Switches the CustomTkinter theme between Light and Dark."""
@@ -489,24 +489,27 @@ class App(ctk.CTk):
             self.hide_menus()
 
     def toggle_settings_panel(self):
-        if self.settings_window.winfo_viewable():
+        if self.settings_window is not None and self.settings_window.winfo_viewable():
             self.close_settings()
         else:
             self.open_settings()
 
     def open_settings(self):
         self.hide_menus()
+        if self.settings_window is None:
+            self.build_settings_window()
         width, height = SETTINGS_SIZE
         x = self.winfo_rootx() + self.winfo_width() - width - 10
         y = self.winfo_rooty() + 65
         self.settings_window.geometry(f"{width}x{height}+{x}+{y}")
         self.settings_window.deiconify()
-        self.refresh_preset_list()               # rebuild now that the window is visible
+        self.refresh_preset_list()
         self.settings_window.lift()
         self.settings_window.focus_force()
 
     def close_settings(self):
-        self.settings_window.withdraw()
+        if self.settings_window is not None:
+            self.settings_window.withdraw()
 
     def toggle_size_menu(self, widget_type, sizes):
         self.color_menu.place_forget()
@@ -584,20 +587,28 @@ class App(ctk.CTk):
 
     def save_current_as_preset(self):
         name = self.preset_name_entry.get().strip()
+
         if not name:
             self.preset_status.configure(text="Type a name first.")
             return
+
         widgets = self.grid_manager.snapshot()
+
         try:
             replaced = save_preset(name, widgets)
         except OSError as error:
             self.preset_status.configure(text=f"Could not save: {error}")
             return
+
         self.preset_name_entry.delete(0, "end")
-        self.preset_status.configure(text=f"{'Updated' if replaced else 'Saved'} '{name}' ({len(widgets)} widgets)")
+        self.preset_status.configure(
+            text=f"{'Updated' if replaced else 'Saved'} '{name}'"
+        )
         self.refresh_preset_list()
 
     def refresh_preset_list(self):
+        if self.settings_window is None: 
+            return
         for child in self.preset_list.winfo_children():
             child.destroy()
         presets = load_presets()
@@ -628,15 +639,30 @@ class App(ctk.CTk):
         self.refresh_preset_list()
 
     def apply_layout_preset(self, reference):
-        """Replace the whole layout with a saved preset (by id or name)."""
+        """Replace the current page with a saved preset."""
         preset = find_preset(load_presets(), reference)
+
         if preset is None:
             raise LookupError(f"no layout named '{reference}'")
+
         if self.grid_manager.drag.editing:
             self.toggle_edit_mode()
+
         self.hide_menus()
         self.close_settings()
-        return self.grid_manager.apply_snapshot(preset["widgets"])
+
+        layout = preset["widgets"]
+
+        # Supports both old and new saved presets.
+        if isinstance(layout, dict):
+            widgets = layout.get("widgets", [])
+        else:
+            widgets = layout
+
+        result = self.grid_manager.apply_snapshot(widgets)
+        self.save_page_layouts()
+
+        return result
 
     def run_scene(self, scene):
         """Run a scene."""
@@ -694,7 +720,7 @@ class App(ctk.CTk):
         self._refresh_trigger_scenes(now)
         self.history.flush_if_due()
 
-        app_awareness_on = bool(self.app_awareness_switch.get())
+        app_awareness_on = bool(self.app_awareness_var.get())
         front_app = get_frontmost_app() if app_awareness_on else None   # the app NAME only
         idle_seconds = get_idle_seconds()
 
@@ -702,7 +728,7 @@ class App(ctk.CTk):
         if front_app and (idle_seconds is None or idle_seconds < ACTIVE_IDLE_LIMIT_SECONDS):
             self.history.add_app_seconds(front_app, TRIGGER_CHECK_MS / 1000, now)
 
-        if not self.suggestions_switch.get():
+        if not self.suggestions_var.get():
             self._debug("blocked: SUGGEST SCENES is switched off in Settings")
             return
         if self.scene_runner.is_running or self.automation_overlay.is_showing:
@@ -752,5 +778,39 @@ class App(ctk.CTk):
         self.hide_menus()
         self.grid_manager.drag.cancel()
         recap = day_recap(self.history, day_key(time.time()))
-        lines = recap_lines(recap, bool(self.app_awareness_switch.get()))
+        lines = recap_lines(recap, bool(self.app_awareness_var.get()))
         self.automation_overlay.show_recap("TODAY", lines)
+
+    def save_page_layouts(self):
+        """Save the current widgets on all three pages."""
+        data = {
+            "pages": [
+                self.grid_manager.snapshot_page(page)
+                for page in range(3)
+            ]
+        }
+
+        try:
+            with open(SESSION_FILE, "w") as session_file:
+                json.dump(data, session_file, indent=2)
+        except OSError as error:
+            print("Could not save page layouts:", error)
+
+
+    def load_page_layouts(self):
+        """Restore the widgets that were on each page when the app last closed."""
+        if not os.path.exists(SESSION_FILE):
+            return
+
+        try:
+            with open(SESSION_FILE, "r") as session_file:
+                data = json.load(session_file)
+
+            pages = data.get("pages", [])
+
+            for page_idx, layout in enumerate(pages):
+                if 0 <= page_idx < len(self.grid_manager.pages):
+                    self.grid_manager.apply_snapshot_to_page(layout, page_idx)
+
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print("Could not load page layouts:", error)

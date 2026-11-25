@@ -13,16 +13,28 @@ def load_presets():
         return []
     try:
         with open(PRESETS_FILE, "r") as presets_file:
-            raw_presets = json.load(presets_file)["layouts"]       # the file is saved as {"layouts": [...]}
+            raw_presets = json.load(presets_file)["layouts"]
     except (OSError, ValueError, KeyError, TypeError) as error:
-        print("layout_presents.json could not be read:", error)
+        print("layouts.json could not be read:", error)
         return []
-
     presets = []
     for preset in raw_presets:
-        if isinstance(preset, dict) and isinstance(preset.get("name"), str) and isinstance(preset.get("widgets"), list):
-            preset.setdefault("id", _slug(preset["name"]))
-            presets.append(preset)
+        if not isinstance(preset, dict):
+            continue
+        if not isinstance(preset.get("name"), str):
+            continue
+        widgets = preset.get("widgets")
+        valid_widgets = (
+            isinstance(widgets, list)
+            or (
+                isinstance(widgets, dict)
+                and isinstance(widgets.get("widgets"), list)
+            )
+        )
+        if not valid_widgets:
+            continue
+        preset.setdefault("id", _slug(preset["name"]))
+        presets.append(preset)
     return presets
 
 def _write_presets(presets):

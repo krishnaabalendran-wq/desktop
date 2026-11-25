@@ -1,3 +1,250 @@
 {
-  "layouts": []
+  "layouts": [
+    {
+      "id": "test",
+      "name": "test",
+      "widgets": {
+        "page": 0,
+        "widgets": [
+          {
+            "type": "Notify",
+            "size": "2x2",
+            "bg": "#2b2216",
+            "fg": "#ffcc80",
+            "page": 0,
+            "r": 0,
+            "c": 0
+          },
+          {
+            "type": "Scenes",
+            "size": "2x2",
+            "bg": "#0b0b0d",
+            "fg": "#a9a9b3",
+            "page": 0,
+            "r": 0,
+            "c": 2
+          },
+          {
+            "type": "Date",
+            "size": "2x1",
+            "bg": "#00204a",
+            "fg": "#4da8da",
+            "page": 0,
+            "r": 2,
+            "c": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "test1",
+      "name": "test1",
+      "widgets": {
+        "page": 0,
+        "widgets": [
+          {
+            "type": "Notify",
+            "size": "2x2",
+            "bg": "#2b2216",
+            "fg": "#ffcc80",
+            "page": 0,
+            "r": 0,
+            "c": 0
+          },
+          {
+            "type": "Scenes",
+            "size": "2x2",
+            "bg": "#0b0b0d",
+            "fg": "#a9a9b3",
+            "page": 0,
+            "r": 0,
+            "c": 2
+          },
+          {
+            "type": "voiceassistant",
+            "size": "2x2",
+            "bg": "#4a3000",
+            "fg": "#ffc34d",
+            "page": 0,
+            "r": 0,
+            "c": 4
+          },
+          {
+            "type": "Date",
+            "size": "2x1",
+            "bg": "#00204a",
+            "fg": "#4da8da",
+            "page": 0,
+            "r": 2,
+            "c": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "hello",
+      "name": "hello",
+      "widgets": {
+        "page": 0,
+        "widgets": [
+          {
+            "type": "Notify",
+            "size": "2x2",
+            "bg": "#2b2216",
+            "fg": "#ffcc80",
+            "page": 0,
+            "r": 0,
+            "c": 0
+          },
+          {
+            "type": "Scenes",
+            "size": "2x2",
+            "bg": "#0b0b0d",
+            "fg": "#a9a9b3",
+            "page": 0,
+            "r": 0,
+            "c": 2
+          },
+          {
+            "type": "voiceassistant",
+            "size": "2x2",
+            "bg": "#4a3000",
+            "fg": "#ffc34d",
+            "page": 0,
+            "r": 0,
+            "c": 4
+          },
+          {
+            "type": "Date",
+            "size": "2x1",
+            "bg": "#00204a",
+            "fg": "#4da8da",
+            "page": 0,
+            "r": 2,
+            "c": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "hi",
+      "name": "hi",
+      "widgets": {
+        "page": 0,
+        "widgets": [
+          {
+            "type": "Notify",
+            "size": "2x2",
+            "bg": "#2b2216",
+            "fg": "#ffcc80",
+            "page": 0,
+            "r": 0,
+            "c": 0
+          },
+          {
+            "type": "Scenes",
+            "size": "2x2",
+            "bg": "#0b0b0d",
+            "fg": "#a9a9b3",
+            "page": 0,
+            "r": 0,
+            "c": 2
+          },
+          {
+            "type": "Date",
+            "size": "2x1",
+            "bg": "#00204a",
+            "fg": "#4da8da",
+            "page": 0,
+            "r": 2,
+            "c": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "test2",
+      "name": "test2",
+      "widgets": {
+        "page": 0,
+        "widgets": [
+          {
+            "type": "Notify",
+            "size": "2x2",
+            "bg": "#2b2216",
+            "fg": "#ffcc80",
+            "page": 0,
+            "r": 0,
+            "c": 0
+          },
+          {
+            "type": "Scenes",
+            "size": "2x2",
+            "bg": "#0b0b0d",
+            "fg": "#a9a9b3",
+            "page": 0,
+            "r": 0,
+            "c": 2
+          },
+          {
+            "type": "voiceassistant",
+            "size": "2x2",
+            "bg": "#4a3000",
+            "fg": "#ffc34d",
+            "page": 0,
+            "r": 0,
+            "c": 4
+          },
+          {
+            "type": "Date",
+            "size": "2x1",
+            "bg": "#00204a",
+            "fg": "#4da8da",
+            "page": 0,
+            "r": 2,
+            "c": 0
+          },
+          {
+            "type": "Volume",
+            "size": "2x1",
+            "bg": "#00204a",
+            "fg": "#4da8da",
+            "page": 0,
+            "r": 2,
+            "c": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "poop",
+      "name": "poop",
+      "widgets": [
+        {
+          "type": "Notify",
+          "size": "2x2",
+          "bg": "#2b2216",
+          "fg": "#ffcc80",
+          "r": 0,
+          "c": 0
+        },
+        {
+          "type": "Scenes",
+          "size": "2x2",
+          "bg": "#0b0b0d",
+          "fg": "#a9a9b3",
+          "r": 0,
+          "c": 2
+        },
+        {
+          "type": "Date",
+          "size": "2x1",
+          "bg": "#00204a",
+          "fg": "#4da8da",
+          "r": 2,
+          "c": 0
+        }
+      ]
+    }
+  ]
 }

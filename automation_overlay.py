@@ -60,14 +60,10 @@ class AutomationOverlay(ctk.CTkFrame):
         self.status_label = ctk.CTkLabel(self.panel, text="", anchor="w", font=mono(13, True), text_color=DIM, fg_color=SURFACE)
         self.status_label.pack(anchor="w", padx=24, pady=(4, 12))
 
-        self.rows_frame = ctk.CTkScrollableFrame(
-            self.panel,
-            corner_radius=0,
-            fg_color=SURFACE,
-            scrollbar_button_color=BORDER,
-            scrollbar_button_hover_color=BORDER_HOVER,
-        )
-        self.rows_frame.pack(fill="both", expand=True, padx=24, pady=(0, 110))
+        self.rows_frame = ctk.CTkFrame(self.panel, corner_radius=0, fg_color=SURFACE)
+        self.rows_frame.pack(fill="x", padx=24)
+
+        self.recap_text = None
 
         self.note_label = ctk.CTkLabel(self.panel, text="", font=mono(11), text_color=DIM, fg_color=SURFACE)
         self.note_label.place(relx=0.5, rely=1.0, y=-84, anchor="s")
@@ -98,18 +94,34 @@ class AutomationOverlay(ctk.CTkFrame):
         self._clear_rows()
         self._place_buttons("run")
         self.countdown_bar.place_forget()
+
+        if self.recap_text is not None:
+            self.recap_text.pack_forget()
+            self.recap_text.destroy()
+            self.recap_text = None
+
+        self.rows_frame.pack(fill="x", padx=24)
+
         self._cover_and_raise()
         self.refresh()
 
     def show_suggestion(self, suggestion, on_run, on_dismissed):
         """Offer a scene. on_run(suggestion) if RUN is pressed; on_dismissed(suggestion, mute_today) otherwise."""
-        from actions import describe_step           # imported here so this file stays easy to test on its own
+        from actions import describe_step  
 
         self.mode = "suggest"
         self._suggestion = suggestion
         self._on_suggestion_run = on_run
         self._on_suggestion_dismissed = on_dismissed
         self._cancel_auto_close()
+
+        if self.recap_text is not None:
+            self.recap_text.pack_forget()
+            self.recap_text.destroy()
+            self.recap_text = None
+
+        self.rows_frame.pack(fill="x", padx=24)
+        
         scene = suggestion["scene"]
 
         self.title_label.configure(text=scene.get("name", ""))
@@ -128,7 +140,7 @@ class AutomationOverlay(ctk.CTkFrame):
         self._tick_countdown()
 
     def show_recap(self, title, lines):
-        """Show a list of text lines (the daily recap). One CLOSE button."""
+        """Show the daily recap in an independently scrollable text box."""
         self.mode = "recap"
         self.runner = None
         self._stop_countdown()
@@ -139,20 +151,60 @@ class AutomationOverlay(ctk.CTkFrame):
         self.title_label.configure(text=title)
         self.status_label.configure(text="RECAP")
         self.note_label.configure(text="")
-        self._ensure_row_count(len(lines))
-        for row_label, line in zip(self._row_labels, lines):
-            # headings (lines that don't start with a space) are bold
-            row_label.configure(text=line, text_color=TEXT, font=mono(14, not line.startswith(" ") and bool(line)))
+
+        self._clear_rows()
+        self.rows_frame.pack_forget()
+
+        if self.recap_text is not None:
+            self.recap_text.destroy()
+            self.recap_text = None
+
+        self.recap_text = ctk.CTkTextbox(
+            self.panel,
+            corner_radius=0,
+            fg_color=SURFACE,
+            text_color=TEXT,
+            font=mono(14),
+            wrap="word",
+            border_width=0,
+        )
+        self.recap_text.pack(
+            fill="both",
+            expand=True,
+            padx=24,
+            pady=(0, 110),
+        )
+        self.recap_text.lift()
+
+        recap_content = "\n".join(str(line) for line in lines)
+
+        if not recap_content.strip():
+            recap_content = "No recap data yet."
+
+        self.recap_text.insert("1.0", recap_content)
+        self.recap_text.configure(state="disabled")
 
         self._place_buttons("run")
-        self.action_button.configure(text="CLOSE", fg_color=BTN, hover_color=BTN_HOVER, text_color=TEXT)
+        self.action_button.configure(
+            text="CLOSE",
+            fg_color=BTN,
+            hover_color=BTN_HOVER,
+            text_color=TEXT,
+        )
+
         self._cover_and_raise()
 
     def hide(self):
         self._cancel_auto_close()
         self._stop_countdown()
+
+        if self.recap_text is not None:
+            self.recap_text.destroy()
+            self.recap_text = None
+
         self.is_showing = False
         self.place_forget()
+
         for widget in self.covered:
             widget.grid()
 

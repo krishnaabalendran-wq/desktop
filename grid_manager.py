@@ -198,35 +198,119 @@ class GridManager(ctk.CTkFrame):
         return page.winfo_rootx() + x, page.winfo_rooty() + y
 
     def snapshot(self):
-            """The current layout as data."""
-            return [{"type": it["type"], "size": it["size"], "bg": it["bg"], "fg": it["fg"], "page": it["page_idx"], "r": it["row"], "c": it["col"]} for it in self.widgets_list]
+        """Save only the widgets on the currently visible page."""
+        return [
+            {
+                "type": it["type"],
+                "size": it["size"],
+                "bg": it["bg"],
+                "fg": it["fg"],
+                "r": it["row"],
+                "c": it["col"]
+            }
+            for it in self.widgets_list
+            if it["page_idx"] == self.current_page_idx
+        ]
+
+    def snapshot_page(self, page_idx):
+        """Save the widgets on one specific page."""
+        return [
+            {
+                "type": it["type"],
+                "size": it["size"],
+                "bg": it["bg"],
+                "fg": it["fg"],
+                "r": it["row"],
+                "c": it["col"]
+            }
+            for it in self.widgets_list
+            if it["page_idx"] == page_idx
+        ]
+
+    def apply_snapshot_to_page(self, layout, page_idx):
+        """Replace one page with the widgets in layout, leaving other pages alone."""
+        self.drag.cancel()
+
+        # Remove only widgets already on that page.
+        for item in list(self.widgets_list):
+            if item["page_idx"] == page_idx:
+                self.remove_widget(item)
+
+        original_page = self.current_page_idx
+        self.current_page_idx = page_idx
+        skipped = 0
+
+        try:
+            for entry in layout:
+                placed = None
+
+                try:
+                    row, col = int(entry["r"]), int(entry["c"])
+                    cols, rows = map(int, entry["size"].split("x"))
+
+                    valid = (
+                        row >= 0
+                        and col >= 0
+                        and row + rows <= self.MAX_ROWS
+                        and col + cols <= self.MAX_COLS
+                    )
+
+                    if valid:
+                        placed = self.add_widget(
+                            entry["type"],
+                            entry["size"],
+                            entry["bg"],
+                            entry["fg"],
+                            at=(row, col)
+                        )
+                except (KeyError, ValueError, TypeError, AttributeError):
+                    pass
+
+                if placed is None:
+                    skipped += 1
+        finally:
+            self.current_page_idx = original_page
+
+        return skipped
 
     def clear_all(self):
         for item in list(self.widgets_list):
             self.remove_widget(item)
 
+    def clear_current_page(self):
+        """Remove only the widgets on the currently visible page."""
+        for item in list(self.widgets_list):
+            if item["page_idx"] == self.current_page_idx:
+                self.remove_widget(item)
+
     def apply_snapshot(self, layout):
-        """Replace every widget with the ones in layout. Entries that are malformed, off the grid or overlapping are skipped."""
+        """Replace the widgets on the current page with the ones in layout."""
         self.drag.cancel()
-        self.clear_all()
-        shown_page = self.current_page_idx
+        self.clear_current_page()
         skipped = 0
-        try:
-            for entry in layout:
-                placed = None
-                try:
-                    page = int(entry.get("page", 0))
-                    row, col = int(entry["r"]), int(entry["c"])
-                    cols, rows = map(int, entry["size"].split("x"))
-                    if (0 <= page < len(self.pages) and row >= 0 and col >= 0 and row + rows <= self.MAX_ROWS and col + cols <= self.MAX_COLS):
-                        self.current_page_idx = page
-                        placed = self.add_widget(entry["type"], entry["size"], entry["bg"], entry["fg"], at=(row, col))
-                except (KeyError, ValueError, TypeError, AttributeError):
-                    pass
-                if placed is None:
-                    skipped += 1
-        finally:
-            self.current_page_idx = shown_page
+        for entry in layout:
+            placed = None
+            try:
+                row, col = int(entry["r"]), int(entry["c"])
+                cols, rows = map(int, entry["size"].split("x"))
+                valid = (
+                    row >= 0
+                    and col >= 0
+                    and row + rows <= self.MAX_ROWS
+                    and col + cols <= self.MAX_COLS
+                )
+                if valid:
+                    placed = self.add_widget(
+                        entry["type"],
+                        entry["size"],
+                        entry["bg"],
+                        entry["fg"],
+                        at=(row, col)
+                    )
+            except (KeyError, ValueError, TypeError, AttributeError):
+                pass
+            if placed is None:
+                skipped += 1
         return skipped
 
     # changing the layout
