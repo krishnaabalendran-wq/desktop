@@ -1311,12 +1311,32 @@ class Widget(ctk.CTkFrame):
     @staticmethod
     def _voiceassistant_remove_wake_word(query):
         words = query.split()
+        after = None
         for i, word in enumerate(words):
             cleaned = word.strip(",.!?")
             if cleaned in voiceassistant_WAKE_WORDS:
-                after = " ".join(words[i + 1:])
-                return after.strip()
-        return None
+                after = " ".join(words[i + 1:]).strip()
+                break
+
+        if after is None:
+            return None
+
+        polite_openers = [
+            "could you please",
+            "can you please",
+            "would you please",
+            "could you",
+            "can you",
+            "would you",
+            "will you",
+            "please",
+        ]
+        for opener in polite_openers:
+            if after.startswith(opener + " "):
+                after = after[len(opener):].strip()
+                break
+
+        return after
 
     @staticmethod
     def _voiceassistant_get_direct_website(command):
